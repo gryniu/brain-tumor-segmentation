@@ -1,0 +1,5 @@
+# Controlled experiment: ONE change relative to configs/default.yaml (Dice + focal instead of Dice + CE).
+_base_: ../default.yaml
+run_name: dice_focal_loss
+loss:
+  name: dice_focal

@@ -1,0 +1,39 @@
+[build-system]
+requires = ["setuptools>=69", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "brain-seg"
+version = "0.1.0"
+description = "3D U-Net brain tumour segmentation on BraTS multi-parametric MRI (research/education only)"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+# Lower bounds only, so an existing CUDA build of PyTorch (e.g. on Colab) is kept.
+# requirements.txt pins the exact versions this project was tested with.
+dependencies = [
+    "torch>=2.4",
+    "monai>=1.4",
+    "nibabel>=5.2",
+    "numpy>=1.26",
+    "scipy>=1.11",
+    "scikit-learn>=1.4",
+    "matplotlib>=3.8",
+    "pandas>=2.1",
+    "pyyaml>=6.0",
+    "tensorboard>=2.16",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0"]
+notebook = ["jupyter"]
+download = ["synapseclient>=4.4"]  # only for scripts/download_brats.py
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-ra"
+markers = ["slow: end-to-end pipeline tests on synthetic data (a few seconds to a minute)"]
+filterwarnings = ["ignore::DeprecationWarning:tensorboard.*", "ignore::FutureWarning:monai.*"]

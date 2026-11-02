@@ -1,0 +1,15 @@
+# Exact versions used to develop and test this project
+# (macOS 26 / Apple M4, Python 3.12.x). Install with: pip install -r requirements.txt
+# On CUDA machines install PyTorch first from https://pytorch.org/get-started/locally/
+# (or keep the preinstalled one on Colab) and then use `pip install -e ".[dev]"`.
+torch==2.15.0
+monai==1.6.1
+nibabel==5.4.2
+numpy==2.5.4
+scipy==1.18.1
+scikit-learn==1.9.1
+matplotlib==3.11.2
+pandas==3.1.0
+pyyaml==6.0.3
+tensorboard==2.21.0
+pytest==9.2.0

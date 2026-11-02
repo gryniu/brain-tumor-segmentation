@@ -1,0 +1,32 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+build/
+dist/
+
+# Notebooks
+.ipynb_checkpoints/
+
+# Data and experiment outputs (never commit MRI data or checkpoints)
+outputs/*
+!outputs/.gitkeep
+data/
+*.nii
+*.nii.gz
+*.pt
+*.pth
+
+# OS / editors
+.DS_Store
+._*
+.idea/
+.vscode/
+
+# Packaging for Colab upload and local scratch
+brain-seg-code.zip
+*.zip
+.claude/

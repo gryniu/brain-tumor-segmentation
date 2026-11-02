@@ -1,0 +1,5 @@
+# Controlled experiment: ONE change relative to configs/default.yaml (higher learning rate).
+_base_: ../default.yaml
+run_name: lr_1e-3
+train:
+  lr: 1.0e-3

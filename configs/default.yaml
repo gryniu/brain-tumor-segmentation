@@ -1,0 +1,81 @@
+# Conservative, portable baseline: runs unchanged on CUDA, Apple MPS or CPU.
+# Every key is documented in src/brain_seg/config.py. Other configs inherit from
+# this file with `_base_: default.yaml` and override only what they change.
+
+data:
+  root: null                 # set here or pass --data-root /path/to/BraTS
+  profile: auto              # auto | brats2021 | brats2023 | custom (see docs/reference.md "Label conventions")
+  modalities: [t1, t1ce, t2, flair]   # channel order of the network input
+  split_file: null           # default: <output_dir>/splits/split_seed<seed>.json (reused if present)
+  val_fraction: 0.15
+  test_fraction: 0.15
+  split_seed: 42
+  validate_headers: true     # check shape/affine of all files before training
+  skip_invalid_cases: false  # true = exclude incomplete cases (they are listed in the log)
+  target_spacing: [1.0, 1.0, 1.0]
+  crop_foreground: true
+  cache: none                # none (stream from disk) | memory (~70 MB/case) | disk
+  cache_rate: 1.0            # fraction of cases cached when cache=memory
+  num_workers: 2             # DataLoader processes; 0 loads in the main process
+
+model:
+  name: unet3d               # unet3d | monai_unet
+  features: [16, 32, 64, 128, 256]   # 5 levels = 4 downsamplings -> patch divisible by 16; 5.65M params
+  norm: instance
+  dropout: 0.0
+
+loss:
+  name: dice_ce              # dice_ce | dice_focal | dice | ce
+  lambda_dice: 1.0
+  lambda_ce: 1.0
+  include_background: false  # Dice over NCR/ED/ET only; CE still covers background
+  class_weights: null
+
+augmentation:
+  enabled: true
+  flip_prob: 0.5
+  affine_prob: 0.2
+  rotate_range_deg: 15
+  scale_range: 0.1
+  intensity_scale_prob: 0.5
+  intensity_scale_factor: 0.1
+  intensity_shift_prob: 0.5
+  intensity_shift_offset: 0.1
+  noise_prob: 0.15
+  noise_std: 0.1
+
+train:
+  device: auto               # auto = cuda -> mps -> cpu; explicit unavailable devices raise an error
+  seed: 42
+  deterministic: false
+  epochs: 300
+  batch_size: 1
+  patch_size: [96, 96, 96]
+  samples_per_volume: 1      # patches per loaded volume (patches per step = batch_size * this)
+  label_sampling_ratios: [1, 1, 1, 1]   # patch-centre sampling ratio for BG, NCR, ED, ET
+  accumulation_steps: 1      # >1 averages gradients over several steps (larger effective batch)
+  optimizer: adamw
+  lr: 2.0e-4
+  weight_decay: 1.0e-5
+  scheduler: cosine          # linear warm-up then cosine decay to min_lr
+  warmup_epochs: 5
+  min_lr: 1.0e-6
+  grad_clip_norm: 12.0       # guards against rare gradient spikes; null disables
+  amp: true                  # mixed precision on CUDA only; MPS/CPU train in float32
+  amp_dtype: float16
+  val_interval: 5            # validate every N epochs
+  early_stopping_patience: 10   # validation rounds without improvement (null disables)
+  early_stopping_min_delta: 1.0e-4
+  train_eval_cases: 4        # training cases evaluated like validation, to spot overfitting
+  limit_train_cases: null
+  limit_val_cases: null
+  log_interval: 50
+
+inference:
+  overlap: 0.5
+  sw_batch_size: 1
+  blend_mode: gaussian
+  stitch_on_cpu: false
+
+output_dir: outputs
+run_name: null               # default: <config name>_<timestamp>
