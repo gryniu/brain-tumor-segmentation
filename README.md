@@ -17,7 +17,8 @@ enhancing tumour, the tumour core and the whole tumour.
 | Code | Complete. **64 unit tests** pass (on synthetic phantoms that live only in `tests/`; the library refuses phantom data elsewhere). |
 | Real data | BraTS 2023 Adult Glioma training set downloaded and validated: **1251 complete cases, 1133 patients**, 4 modalities + mask each, no geometry errors. |
 | Pilot | A short real-data pilot on a Colab T4 ran end to end: the loss decreased and validation Dice rose. A pilot is a sanity check, **not a result**. |
-| Full training | Not finished yet. **This README therefore reports no Dice scores**; the [Results](#results) section is filled only from a real test-set evaluation. |
+| Baseline run | **Done:** 20 epochs on a free Colab T4 in about 35 minutes of training, using 250 of the 874 training cases. Evaluated once on the held-out test set (194 cases), see [Results](#results). |
+| Next | Longer training on all training cases, a larger patch and model, post-processing and test-time augmentation (see [Future improvements](docs/reference.md#future-improvements)). |
 
 ## How it works
 
@@ -119,13 +120,36 @@ python scripts/predict.py  --checkpoint outputs/runs/<run>/checkpoints/best.pt -
 
 ## Results
 
-> **No final results yet.** A full training run and a single test-set evaluation have not been completed, so this
-> repository reports no Dice scores. This section is filled from `outputs/runs/<run>/eval_test/summary.md`
-> after a real run. Numbers from phantoms, from pilots, or from other papers are never copied here.
+Baseline run `colab_1h` (`configs/colab_t4_1h.yaml`), evaluated **once** on the held-out test set of
+194 cases (patient-level split, seed 42), in the original voxel space. Best checkpoint chosen on a 20-case
+validation subset; the test set was not used for any decision.
 
-| Run | Dice ET | Dice TC | Dice WT | HD95 ET / TC / WT (mm) |
-|---|---|---|---|---|
-| _to be filled from the test evaluation_ | | | | |
+| Region | Dice mean ± std | Dice median | HD95 mean (mm) | HD95 median (mm) | Sensitivity | Precision |
+|---|---|---|---|---|---|---|
+| ET (enhancing tumour) | 0.825 ± 0.188 | 0.887 | 6.99 | 2.24 | 0.839 | 0.858 |
+| TC (tumour core) | 0.871 ± 0.175 | 0.933 | 8.91 | 2.83 | 0.861 | 0.914 |
+| WT (whole tumour) | 0.903 ± 0.095 | 0.928 | 10.44 | 3.74 | 0.885 | 0.937 |
+
+Mean of the three regional Dice values per case: **0.866** (median 0.908). Test set: 194 cases.
+
+Source: `eval_test/summary.md` of this run. Dice uses the BraTS convention that a correctly empty prediction scores 1.0
+(5 test cases have an empty ET reference mask, 1 an empty TC mask, none an empty WT mask). Undefined values are
+excluded from the means: HD95 is based on 191 (ET), 193 (TC) and 194 (WT) cases, sensitivity on 189 / 193 / 194 and
+precision on 192 / 192 / 194.
+
+**How to read this honestly**
+
+* This is a deliberately small run: a 5.65 M-parameter model, 96³ patches, **250 of 874 training cases**, 20 epochs
+  (about 35 minutes on a free T4). It is a baseline, not the best this code can do.
+* The median is clearly higher than the mean for ET and TC: most cases are segmented well, while a few
+  fail badly (the minimum Dice is 0.00 for ET and TC, and 0.13 for WT). The same is visible in HD95, whose mean
+  (7-10 mm) is several times the median (2-4 mm) because of a few far-off errors (maximum about 106-108 mm for ET and TC).
+  Look at the per-case table (`eval_test/per_case_metrics.csv`) and the worst cases, not only at the means.
+* Precision is higher than sensitivity in every region: on average the model under-segments (misses some tumour)
+  rather than over-segments.
+* One run, one seed: there is no confidence interval, so small differences between future runs are not meaningful.
+* BraTS 2023 data, trained and tested on cases from the same release; performance on other scanners or
+  populations is not known.
 
 ## Documentation
 
