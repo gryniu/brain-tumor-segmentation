@@ -1,22 +1,6 @@
-"""Figures for data inspection, training curves and qualitative/quantitative evaluation.
+"""Figures: case overview, prediction overlays, training curves and evaluation plots.
 
-All figures are generated from real files on disk (MRI volumes, reference
-masks, saved predictions, history/metrics files) - never from made-up data.
-
-Display conventions:
-
-* volumes are reoriented to RAS before slicing, so every figure has the same
-  anatomical orientation regardless of how the NIfTI was stored;
-* axial/coronal slices are shown in *neurological* convention (patient left on
-  the image left), superior/anterior up;
-* one colour per meaning everywhere: ET = blue, NCR/TC = orange, ED/WT = aqua
-  (colour-vision-deficiency-safe trio), always with a legend.
-
-Command line (``scripts/visualize.py``)::
-
-    case        modalities + reference overlay for a dataset case
-    history     loss and Dice curves of a training run
-    evaluation  Dice distributions + best/median/worst test cases of an evaluation
+Volumes are reoriented to RAS before slicing; colours: ET blue, NCR/TC orange, ED/WT aqua.
 """
 
 from __future__ import annotations

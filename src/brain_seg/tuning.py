@@ -1,18 +1,11 @@
-"""Tune post-processing thresholds (and optionally TTA) on the VALIDATION set.
+"""Grid search of post-processing thresholds on the validation set (the test set is rejected).
 
-For every validation case the model is run once (without post-processing); then every combination of
-``(et_min_voxels, min_component_voxels)`` from the grids is scored against the reference mask. The setting
-with the highest mean Dice (mean of ET, TC, WT) is reported next to the unprocessed baseline. The test set
-is rejected on purpose: thresholds chosen on the test set would make the final result optimistic.
-
-Metrics are computed on the bounding box of prediction and reference (plus a margin), which does not
-change Dice or connected components because everything outside it is background in both.
+Metrics are computed on the bounding box of prediction and reference, which leaves Dice unchanged.
 """
 
 from __future__ import annotations
 
 import argparse
-import itertools
 import json
 from pathlib import Path
 from typing import Any

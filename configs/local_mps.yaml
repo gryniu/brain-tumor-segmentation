@@ -1,9 +1,4 @@
-# Development and small experiments on an Apple Silicon Mac (16 GB unified memory).
-# Same model and patch size as default.yaml, so local runs stay comparable with default.yaml
-# runs; only throughput-related settings (validation subset, overlap) change.
-#
-# Measured on an Apple M4 Mac (PyTorch 2.15, float32): one training step with
-# this model and a 96^3 patch takes ~0.9 s and ~2.2 GB of MPS memory.
+# Apple Silicon (16 GB). Same model and patch as default.yaml; measured on an M4: ~0.9 s and ~2.2 GB per step.
 _base_: default.yaml
 
 data:

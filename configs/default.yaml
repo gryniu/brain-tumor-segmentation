@@ -1,6 +1,4 @@
-# Conservative, portable baseline: runs unchanged on CUDA, Apple MPS or CPU.
-# Every key is documented in src/brain_seg/config.py. Other configs inherit from
-# this file with `_base_: default.yaml` and override only what they change.
+# Portable baseline for CUDA, MPS or CPU. Keys are documented in src/brain_seg/config.py.
 
 data:
   root: null                 # set here or pass --data-root /path/to/BraTS
@@ -14,7 +12,7 @@ data:
   skip_invalid_cases: false  # true = exclude incomplete cases (they are listed in the log)
   target_spacing: [1.0, 1.0, 1.0]
   crop_foreground: true
-  cache: none                # none (stream from disk) | memory (~70 MB/case) | disk
+  cache: none                # none | memory | disk | npy
   cache_rate: 1.0            # fraction of cases cached when cache=memory
   num_workers: 2             # DataLoader processes; 0 loads in the main process
 

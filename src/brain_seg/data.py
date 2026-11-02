@@ -1,17 +1,7 @@
-"""Dataset discovery, validation, label-convention profiles and patient-level splits.
+"""Dataset discovery and validation, label-convention profiles, patient-level splits and datasets.
 
-The BraTS releases differ in directory layout, file naming and label IDs, so
-nothing here assumes a fixed structure:
-
-* Cases are discovered by scanning ``data.root`` recursively for NIfTI files and
-  grouping them by filename prefix. The *last* ``_``/``-``-separated token of a
-  filename identifies its role (``flair``, ``t1c``, ``seg``, ...). Nested
-  (``root/<case>/<case>_t1.nii.gz``) and flat layouts both work.
-* Modality aliases map every release's naming to four canonical channels
-  (``t1``, ``t1ce``, ``t2``, ``flair``), so the channel order is always fixed.
-* A *profile* maps the release's raw label IDs to the canonical classes defined
-  in :mod:`brain_seg.labels`. ``profile: auto`` reads label values from real
-  masks before choosing; unknown label values always raise an error.
+Cases are found by scanning ``data.root`` recursively and grouping NIfTI files by filename prefix;
+the last ``_``/``-`` token of a filename gives its role (``flair``, ``t1c``, ``seg``, ...).
 """
 
 from __future__ import annotations
@@ -256,11 +246,7 @@ def discover_cases(
 def check_case_geometry(
     case: CaseRecord, modalities: list[str], atol: float = 1e-3
 ) -> tuple[tuple[int, ...], tuple[float, ...]]:
-    """Verify that all modalities and the mask share shape and affine (header-only read).
-
-    Returns the shared shape and voxel spacing. BraTS volumes are co-registered,
-    so a mismatch means a corrupted or wrongly assembled case.
-    """
+    """Check that all modalities and the mask share shape and affine; return (shape, spacing)."""
     paths = [(m, case.images[m]) for m in modalities]
     if case.label is not None:
         paths.append(("label", case.label))
@@ -327,7 +313,7 @@ def detect_profile(cases: list[CaseRecord], max_cases: int = 5) -> tuple[Dataset
         return BUILTIN_PROFILES["brats2021"], evidence
     if 3 in values:
         return BUILTIN_PROFILES["brats2023"], evidence
-    # Only 0/1/2 seen: fall back to the naming scheme, but say so.
+    # no ET label in the sample: decide by file naming
     name = "brats2023" if labelled[0].case_id.startswith("BraTS-") else "brats2021"
     return BUILTIN_PROFILES[name], f"{evidence}; ET label absent, chose {name} from file naming"
 
@@ -529,21 +515,10 @@ def load_canonical_label(path: str | Path, profile: DatasetProfile) -> np.ndarra
 
 
 class CompactCacheDataset:
-    """Disk cache of the deterministic preprocessing in a compact, fast-to-read format.
+    """Disk cache of the deterministic preprocessing: image as float16, mask as uint8, memory-mapped.
 
-    The first access to a case runs ``pre_transform`` (decompress NIfTI, reorient, resample, crop,
-    z-score) and stores the result as two ``.npy`` files: the image as **float16** and the mask as
-    **uint8** (canonical classes 0-3, so the mask is lossless). Later accesses memory-map those files,
-    so no decompression or resampling is repeated and, with about 9 bytes per voxel instead of the
-    20 bytes of a float32 image plus float32 mask, the cache is roughly 2.2x smaller than ``disk``.
-
-    float16 keeps ~3 significant digits, ample for z-scored intensities (|value| < ~10); the
-    quantisation is far below the intensity augmentation noise (std 0.1) applied during training.
-    ``post_transform`` (random patch sampling and augmentation) runs on every access. Without a
-    ``post_transform`` the full volume is returned as float32 tensors (validation).
-
-    Files are written atomically and keyed by the case's file paths, so several DataLoader workers
-    or processes can share a cache directory, and a truncated or corrupt file is rebuilt.
+    ``post_transform`` (patch sampling, augmentation) runs on every access; without it the full volume is
+    returned as float32 (validation). Entries are written atomically; unreadable entries are rebuilt.
     """
 
     def __init__(self, items: list[dict[str, Any]], pre_transform: Any, post_transform: Any, cache_dir: str | Path):
@@ -578,22 +553,23 @@ class CompactCacheDataset:
         if label.min() < 0 or label.max() >= NUM_CLASSES or not np.array_equal(label, np.round(label)):
             raise ValueError(f"{item.get('case_id')}: preprocessed mask is not a canonical class map")
         self._atomic_save(label.astype(np.uint8), label_path)
-        self._atomic_save(image.astype(np.float16), image_path)  # written last: its presence marks a complete entry
+        self._atomic_save(image.astype(np.float16), image_path)  # written last: marks a complete entry
+
+    @staticmethod
+    def _open(image_path: Path, label_path: Path) -> tuple[np.ndarray, np.ndarray]:
+        image = np.load(image_path, mmap_mode="r")
+        label = np.load(label_path, mmap_mode="r")
+        if image.shape[1:] != label.shape[1:]:
+            raise ValueError("image and mask shapes differ")
+        return image, label
 
     def _load(self, item: dict[str, Any]) -> tuple[np.ndarray, np.ndarray]:
         image_path, label_path = self._paths(item)
-        for attempt in range(2):
-            try:
-                image = np.load(image_path, mmap_mode="r")
-                label = np.load(label_path, mmap_mode="r")
-                if image.shape[1:] != label.shape[1:]:
-                    raise ValueError("image and mask shapes differ")
-                return image, label
-            except (FileNotFoundError, ValueError, EOFError, OSError):
-                if attempt:
-                    raise
-                self._build(item, image_path, label_path)
-        raise AssertionError("unreachable")
+        try:
+            return self._open(image_path, label_path)
+        except (FileNotFoundError, ValueError, EOFError, OSError):
+            self._build(item, image_path, label_path)
+            return self._open(image_path, label_path)
 
     def __getitem__(self, index: int) -> Any:
         import torch
@@ -619,13 +595,9 @@ def build_dataset(
     cache_dir: str | Path | None = None,
     split_transforms: tuple[Any, Any | None] | None = None,
 ):
-    """Wrap case dictionaries in a MONAI dataset with the requested caching strategy.
+    """Dataset with caching ``none`` | ``memory`` | ``disk`` (MONAI) | ``npy`` (:class:`CompactCacheDataset`).
 
-    * ``none``   - load and preprocess every time (lowest memory, slowest).
-    * ``memory`` - cache deterministic preprocessing in RAM (fast, ~70 MB per BraTS case).
-    * ``disk``   - cache deterministic preprocessing as .pt files (fast after the first epoch).
-    * ``npy``    - compact float16/uint8 disk cache (:class:`CompactCacheDataset`); needs
-      ``split_transforms=(preprocessing, random_part_or_None)`` instead of ``transform``.
+    ``npy`` needs ``split_transforms=(preprocessing, random_part_or_None)`` instead of ``transform``.
     """
     from monai.data import CacheDataset, Dataset, PersistentDataset
 

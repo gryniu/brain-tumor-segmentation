@@ -1,4 +1,4 @@
-# Controlled experiment: ONE change relative to configs/default.yaml (Dice + focal instead of Dice + CE).
+# One change vs default.yaml (Dice + focal instead of Dice + CE).
 _base_: ../default.yaml
 run_name: dice_focal_loss
 loss:

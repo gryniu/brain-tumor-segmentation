@@ -1,9 +1,4 @@
-"""Draw the schematic diagrams used in the README (no patient data, no model output).
-
-    python scripts/make_diagrams.py            # writes docs/images/pipeline.png and docs/images/regions.png
-
-Both figures are hand-drawn schematics of the method. They are NOT MRI scans and NOT results.
-"""
+"""Draw the schematic README diagrams into docs/images/ (no patient data)."""
 
 from __future__ import annotations
 

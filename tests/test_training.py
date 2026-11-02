@@ -1,8 +1,4 @@
-"""Loss functions, a minimal training step per device, and the full pipeline on synthetic phantoms (tests only).
-
-These are SOFTWARE tests. The phantoms are geometric shapes, so any Dice value
-seen here is meaningless for brain tumour segmentation on real MRI.
-"""
+"""Losses, a training step per device and the full pipeline on synthetic phantoms."""
 
 from __future__ import annotations
 
@@ -109,11 +105,7 @@ def test_full_pipeline_train_resume_evaluate_predict(brats2021_root, tmp_path):
 
 @pytest.mark.parametrize("device_name", available_devices())
 def test_predict_case_returns_original_grid(tmp_path, device_name):
-    """Regression: predictions must be inverted to the original voxel grid on every device.
-
-    MONAI's Invertd silently skips plain (non-Meta) tensors, which once left predictions in the
-    cropped/resampled grid. predict_case must return the shape of the file on disk.
-    """
+    """Regression: predictions are inverted to the original grid (Invertd skips plain tensors)."""
     from brain_seg.inference import predict_case
     from synthetic import write_synthetic_dataset
     from brain_seg.transforms import build_eval_transforms

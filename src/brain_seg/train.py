@@ -1,23 +1,8 @@
-"""Training loop with patch-based sampling, mixed precision, checkpointing and early stopping.
+"""Training loop: patch sampling, mixed precision, checkpointing, resume, early stopping and time cap.
 
-Model selection uses ``val_dice_mean``: the mean of ET, TC and WT Dice computed
-per validation case on full volumes (sliding-window inference, BraTS empty-mask
-convention) and averaged over cases. Validation runs in the preprocessed space
-(RAS, target spacing, brain crop); the final test evaluation in
-:mod:`brain_seg.evaluate` additionally inverts predictions to the original grid.
-
-Run directory layout (``<output_dir>/runs/<run_name>/``)::
-
-    config.yaml           resolved configuration of this run
-    split.json            exact patient-level split used
-    dataset_profile.json  label convention used
-    environment.json      library versions and hardware
-    train.log             full log
-    history.json/.csv     per-epoch metrics
-    checkpoints/last.pt   end of the latest completed epoch (resumable)
-    checkpoints/best.pt   best validation Dice so far
-    figures/              loss and Dice curves
-    tensorboard/          TensorBoard event files
+Model selection uses ``val_dice_mean`` (mean of ET/TC/WT Dice per validation case, full volumes).
+Each run writes config, split, environment, log, history, checkpoints (``last.pt``, ``best.pt``),
+figures and TensorBoard events to ``<output_dir>/runs/<run_name>/``.
 """
 
 from __future__ import annotations
@@ -358,17 +343,14 @@ def train(
     started_at = time.time()
     try:
         for epoch in range(start_epoch, t.epochs):
-            # Re-seeding per epoch makes the shuffling order of a resumed run match an uninterrupted
-            # one. Augmentation RNGs in persistent DataLoader workers are seeded once per process,
-            # so resumed runs are close to, but not bitwise identical with, uninterrupted runs.
+            # per-epoch seed: a resumed run shuffles like an uninterrupted one
             seed_everything(t.seed + epoch, t.deterministic)
             start = time.time()
             lr = optimizer.param_groups[0]["lr"]
             train_loss = train_one_epoch(model, loaders["train"], loss_fn, optimizer, scaler, cfg, device, use_amp, epoch)
             scheduler.step()
             train_seconds = time.time() - start
-            # Time cap: do not start an epoch that would overrun it (an epoch can last 30+ min on a
-            # small GPU). The last epoch is then always validated so best.pt reflects the final state.
+            # time cap: stop before an epoch that would not fit, validating the last one
             out_of_time = (
                 t.max_hours is not None and epoch + 1 < t.epochs
                 and time.time() - started_at + train_seconds >= t.max_hours * 3600
@@ -470,7 +452,7 @@ def main(argv: list[str] | None = None) -> None:
     try:
         train(cfg, data_root=args.data_root, resume=args.resume, config_path=args.config)
     except KeyboardInterrupt:
-        raise SystemExit(130)
+        raise SystemExit(130) from None
 
 
 if __name__ == "__main__":

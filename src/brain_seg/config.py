@@ -1,13 +1,6 @@
-"""Typed experiment configuration.
+"""Typed YAML configuration with ``_base_`` inheritance and ``--set key=value`` overrides.
 
-Configurations are YAML files that map onto the dataclasses below. Two small
-features keep experiments controlled and reproducible:
-
-* ``_base_: other.yaml`` - a config may inherit from another file and override
-  only the keys it changes (one change per experiment file).
-* ``--set section.key=value`` - command-line overrides, parsed as YAML values.
-
-Unknown keys are rejected so that a typo never silently falls back to a default.
+Unknown keys are rejected.
 """
 
 from __future__ import annotations
@@ -39,9 +32,9 @@ class DataConfig:
     skip_invalid_cases: bool = False  # if true, invalid cases are excluded and reported
     target_spacing: list[float] | None = field(default_factory=lambda: [1.0, 1.0, 1.0])
     crop_foreground: bool = True
-    cache: str = "none"  # none | memory | disk | npy (compact float16/uint8 disk cache, ~2.2x smaller than disk)
+    cache: str = "none"  # none | memory | disk | npy
     cache_rate: float = 1.0
-    cache_dir: str | None = None  # where disk/npy caches go (default: <output_dir>/cache); keep it on a fast local disk
+    cache_dir: str | None = None  # default: <output_dir>/cache
     num_workers: int = 2  # DataLoader worker processes (0 = load in the main process)
 
 
@@ -51,10 +44,7 @@ class ModelConfig:
     features: list[int] = field(default_factory=lambda: [16, 32, 64, 128, 256])
     norm: str = "instance"  # instance | batch | group
     dropout: float = 0.0
-    # softmax: 4 mutually exclusive classes (BG/NCR/ED/ET), argmax decoding.
-    # regions: 3 sigmoid outputs for the nested BraTS regions ET, TC, WT (the metrics' own targets),
-    #          decoded by thresholding at 0.5 and nesting (ET inside TC inside WT).
-    output: str = "softmax"
+    output: str = "softmax"  # softmax (BG/NCR/ED/ET) | regions (sigmoid ET/TC/WT)
 
 
 @dataclass
@@ -107,7 +97,7 @@ class TrainConfig:
     early_stopping_patience: int | None = 10  # in validation rounds; null disables
     early_stopping_min_delta: float = 1e-4
     train_eval_cases: int = 4  # training cases re-evaluated like validation (overfitting check)
-    max_hours: float | None = None  # wall-time cap (resumable): never starts an epoch that would not fit, validates once more before stopping
+    max_hours: float | None = None  # wall-time cap; skips an epoch that would not fit
     limit_train_cases: int | None = None  # debugging only
     limit_val_cases: int | None = None  # debugging only
     log_interval: int = 20
@@ -119,13 +109,9 @@ class InferenceConfig:
     sw_batch_size: int = 1
     blend_mode: str = "gaussian"  # gaussian | constant
     stitch_on_cpu: bool = False  # assemble full-volume logits in CPU RAM to save GPU memory
-    # Test-time augmentation for evaluate/predict (never during training-time validation):
-    # none | flips3 (original + one flip per axis, 4 passes) | flips8 (all 8 flip combinations).
-    tta: str = "none"
-    # Post-processing of the final label map (evaluate/predict); 0 disables. Tune on VALIDATION with
-    # scripts/tune_postprocessing.py, never on the test set.
-    postprocess_et_min_voxels: int = 0  # ET predicted with fewer voxels than this is relabelled NCR
-    postprocess_min_component_voxels: int = 0  # drop whole-tumour components smaller than this
+    tta: str = "none"  # none | flips3 | flips8 (evaluate/predict only)
+    postprocess_et_min_voxels: int = 0  # smaller ET is relabelled NCR; 0 disables
+    postprocess_min_component_voxels: int = 0  # smaller tumour components are removed; 0 disables
 
 
 @dataclass

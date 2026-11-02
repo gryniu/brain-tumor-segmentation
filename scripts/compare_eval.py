@@ -1,10 +1,6 @@
-"""Paired comparison of two evaluations on the same cases, with patient-level bootstrap intervals.
+"""Paired comparison of two evaluations on the same cases (patient-level bootstrap).
 
     python scripts/compare_eval.py outputs/runs/A/eval_val outputs/runs/B/eval_val
-
-Reports, for each metric, the mean per-case difference A - B, its 95% interval and the share of bootstrap
-resamples in which A is better (higher Dice; for HD95 lower is better and the sign is flipped).
-Use it on VALIDATION evaluations to choose between variants; the test set is for the final model only.
 """
 
 from __future__ import annotations

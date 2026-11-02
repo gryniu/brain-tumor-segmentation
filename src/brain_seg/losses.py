@@ -1,19 +1,6 @@
-"""Loss functions for the 4-class softmax output.
+"""Losses on logits (B, K, ...) and canonical label targets (B, 1, ...).
 
-All losses take ``logits`` of shape (B, K, X, Y, Z) and ``target`` of shape
-(B, 1, X, Y, Z) holding canonical class indices; one-hot encoding and softmax
-are applied inside the loss so they always match the output representation.
-
-Class imbalance (tumour classes are often < 1% of brain voxels) is handled in
-three places:
-
-* the Dice term is computed per class and averaged, so small classes count as
-  much as large ones; ``include_background=False`` drops the dominant class
-  from the Dice average;
-* ``batch=True`` pools Dice statistics over the whole batch, which keeps the
-  loss stable when a class is absent from an individual patch;
-* label-aware patch sampling (``train.label_sampling_ratios``) over-represents
-  tumour voxels in the training patches.
+Dice is computed per class over the batch (``batch=True``) and, by default, without background.
 """
 
 from __future__ import annotations
@@ -40,7 +27,7 @@ class CrossEntropy3D(nn.Module):
 
 
 class _DiceWithCEWeights(nn.Module):
-    """Dice (+ weighted CE) composed explicitly so CE class weights never touch the Dice term."""
+    """Dice + class-weighted CE (the weights apply to CE only)."""
 
     def __init__(self, dice: nn.Module, ce: nn.Module, lambda_dice: float, lambda_ce: float) -> None:
         super().__init__()
@@ -52,13 +39,7 @@ class _DiceWithCEWeights(nn.Module):
 
 
 class RegionDiceBCELoss(nn.Module):
-    """Dice + binary cross-entropy on the three nested regions (ET, TC, WT) with sigmoid outputs.
-
-    ``logits`` are (B, 3, ...) and ``target`` holds canonical class labels (B, 1, ...); the region masks
-    are derived from the labels inside the loss, so training optimises the quantities that are evaluated.
-    Dice is computed per region over the whole batch (``batch=True``), keeping it stable when a region is
-    absent from a patch; ``lambda_ce`` weights the BCE term (``lambda_ce=0`` gives pure Dice).
-    """
+    """Dice + BCE on sigmoid ET/TC/WT outputs (B, 3, ...); region targets are derived from the labels."""
 
     def __init__(self, lambda_dice: float = 1.0, lambda_bce: float = 1.0) -> None:
         super().__init__()

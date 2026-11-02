@@ -1,22 +1,14 @@
-# Short real-data run for a free Colab T4 (2 vCPU, 15 GB GPU) with a budget of about one hour.
-#
-# NOT yet measured on a T4: the numbers below are planning estimates. Check the first epochs in the log
-# (epoch 1 builds the cache and is slow, later epochs are much faster) and adjust limit_train_cases /
-# epochs if needed. train.max_hours is a hard guard: it never starts an epoch that would not fit,
-# validates once more and writes a resumable last.pt.
-#
-# Why a subset: the full 874 training cases would need ~25+ minutes just to fill the cache on 2 CPUs.
-# 250 cases are the first 250 of the patient-level training split (same split file as every other run).
-# Metrics from this run are real validation numbers but come from a deliberately short, small-data run.
+# Free Colab T4 (2 vCPU, 15 GB), about one hour: 250 of 874 training cases, compact cache, time cap.
+# Epoch 1 builds the cache and is slow (~490 s measured); later epochs took ~78 s.
 _base_: cloud_cuda.yaml
 
 data:
-  cache: npy                 # compact float16/uint8 disk cache (see docs/reference.md)
-  cache_dir: /content/cache  # local Colab disk: fast, and keeps the cache off the 15 GB Google Drive
+  cache: npy
+  cache_dir: /content/cache  # local disk, not Google Drive
   num_workers: 2             # Colab has 2 vCPUs
 
 model:
-  features: [16, 32, 64, 128, 256]   # 5.65M parameters: ~3x fewer FLOPs than the 16.6M-parameter default
+  features: [16, 32, 64, 128, 256]   # 5.65M parameters
 
 train:
   patch_size: [96, 96, 96]
@@ -24,8 +16,8 @@ train:
   epochs: 20
   val_interval: 5
   limit_train_cases: 250
-  limit_val_cases: 20        # periodic validation on 20 cases keeps validation to a few minutes
+  limit_val_cases: 20
   train_eval_cases: 2
   early_stopping_patience: null
   warmup_epochs: 1
-  max_hours: 0.65            # ~39 min of training; the rest of the hour is setup and the final test evaluation
+  max_hours: 0.65

@@ -1,9 +1,4 @@
-"""Failure analysis of an evaluation run from ``per_case_metrics.csv`` (numbers only, no patient images).
-
-For each region (ET, TC, WT) this answers: which cases fail, how do they fail (the model found nothing,
-found far too much, or found something in the wrong place), and does the Dice depend on the size of the
-reference region? It works purely from per-case voxel counts and metrics, so it can be shared safely.
-"""
+"""Failure analysis from ``per_case_metrics.csv``: failure modes, Dice vs. reference volume, worst cases."""
 
 from __future__ import annotations
 
@@ -66,6 +61,10 @@ def analyse(frame: pd.DataFrame) -> dict:
     return result
 
 
+def _per_region(row: dict, prefix: str, fmt: str) -> str:
+    return " / ".join(fmt.format(row[f"{prefix}_{r}"]) for r in REGIONS)
+
+
 def write_report(analysis: dict, path: Path) -> None:
     lines = [f"# Failure analysis ({analysis['n_cases']} cases)", "",
              f"A region counts as a failure when its Dice is below {FAIL_DICE}. Volumes are in voxels (1 mm³ for BraTS).", ""]
@@ -87,9 +86,8 @@ def write_report(analysis: dict, path: Path) -> None:
               "| Case | Dice mean | Dice ET / TC / WT | Reference voxels ET / TC / WT | Predicted voxels ET / TC / WT |",
               "|---|---|---|---|---|"]
     for row in analysis["worst_cases"]:
-        fmt = lambda prefix, f="{:.2f}": " / ".join(f.format(row[f"{prefix}_{r}"]) for r in REGIONS)  # noqa: E731
-        lines.append(f"| {row['case_id']} | {row['dice_mean']:.3f} | {fmt('dice')} | {fmt('ref_voxels', '{:.0f}')} | "
-                     f"{fmt('pred_voxels', '{:.0f}')} |")
+        lines.append(f"| {row['case_id']} | {row['dice_mean']:.3f} | {_per_region(row, 'dice', '{:.2f}')} | "
+                     f"{_per_region(row, 'ref_voxels', '{:.0f}')} | {_per_region(row, 'pred_voxels', '{:.0f}')} |")
     path.write_text("\n".join(lines) + "\n")
 
 

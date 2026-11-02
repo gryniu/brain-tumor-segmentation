@@ -1,26 +1,5 @@
-"""3D U-Net for volumetric multi-class segmentation.
-
-``UNet3D`` follows the original 3D U-Net (Cicek et al., 2016) with modern
-defaults (instance normalisation, LeakyReLU), written out explicitly so every
-stage is easy to read and modify::
-
-    input (B, C_in, X, Y, Z)
-      |
-      enc0: ConvBlock(C_in -> f0)  ------------------------------ skip0 ---+
-      maxpool /2                                                           |
-      enc1: ConvBlock(f0 -> f1)    -------------------- skip1 ---+         |
-      maxpool /2                                                 |         |
-      ...                                                        |         |
-      bottleneck: ConvBlock(f[n-2] -> f[n-1])  (lowest resolution)         |
-      ...                                                        |         |
-      up1: ConvTranspose x2 (f2 -> f1), concat skip1, ConvBlock(2*f1 -> f1)|
-      up0: ConvTranspose x2 (f1 -> f0), concat skip0, ConvBlock(2*f0 -> f0)
-      head: 1x1x1 Conv (f0 -> K)
-      |
-    logits (B, K, X, Y, Z)   -- softmax over K classes, argmax = label map
-
-With ``features = [16, 32, 64, 128, 256]`` there are 4 downsampling steps, so
-every spatial input dimension must be divisible by 2**4 = 16.
+"""3D U-Net: conv blocks with instance norm and LeakyReLU, max-pool downsampling, transposed-conv
+upsampling with skip connections and a 1x1x1 head. Spatial sizes must be divisible by 2**(levels - 1).
 """
 
 from __future__ import annotations
@@ -59,15 +38,7 @@ class ConvBlock(nn.Sequential):
 
 
 class UNet3D(nn.Module):
-    """Encoder-decoder 3D U-Net with skip connections.
-
-    Args:
-        in_channels: number of input MRI modalities (4 for T1/T1ce/T2/FLAIR).
-        out_channels: number of output classes (4: BG, NCR, ED, ET).
-        features: channels per resolution level; the last entry is the bottleneck.
-        norm: ``instance`` (default, robust for small batches), ``batch`` or ``group``.
-        dropout: dropout probability inside each conv block (0 disables).
-    """
+    """3D U-Net; ``features`` are the channels per level, the last one being the bottleneck."""
 
     def __init__(
         self,

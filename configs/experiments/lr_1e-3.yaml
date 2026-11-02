@@ -1,4 +1,4 @@
-# Controlled experiment: ONE change relative to configs/default.yaml (higher learning rate).
+# One change vs default.yaml (higher learning rate).
 _base_: ../default.yaml
 run_name: lr_1e-3
 train:

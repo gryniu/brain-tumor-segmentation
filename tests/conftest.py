@@ -1,9 +1,5 @@
-"""Shared fixtures.
-
-IMPORTANT: every test uses small *synthetic phantoms* (tests/synthetic.py), never BraTS data.
-Synthetic data lives only in the test suite; the library refuses phantom datasets unless the
-BRAIN_SEG_ALLOW_SYNTHETIC environment variable is set, which only this file does. Passing tests show the code is internally consistent; they say
-nothing about segmentation quality on real MRI.
+"""Shared fixtures. Tests use synthetic phantoms (tests/synthetic.py) only; the library rejects them
+unless BRAIN_SEG_ALLOW_SYNTHETIC is set, which this file does.
 """
 
 from __future__ import annotations

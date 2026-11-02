@@ -1,17 +1,5 @@
-"""Full-volume inference: checkpoint loading, sliding-window prediction, NIfTI export.
-
-The network is trained on patches, but every MRI volume is larger than a patch.
-At inference time the preprocessed volume is tiled with overlapping windows of
-the training patch size (``inference.overlap``); window logits are blended with
-a Gaussian weight that down-weights window borders, where context is missing.
-
-The resulting softmax probabilities live in the preprocessed space (RAS, target
-spacing, cropped). They are mapped back to the original voxel grid with MONAI
-``Invertd`` (undo crop -> resampling -> reorientation) and only then converted
-to labels with argmax, so saved masks align voxel-for-voxel with the input
-images and can be compared directly against reference masks.
-
-Run as a script::
+"""Full-volume inference: checkpoint loading, sliding-window prediction, TTA, inversion to the original
+voxel grid, post-processing and NIfTI export.
 
     python scripts/predict.py --checkpoint outputs/runs/<run>/checkpoints/best.pt \
         --input-dir /path/to/case_dir --output-dir outputs/predictions
@@ -52,8 +40,7 @@ def load_checkpoint(path: str | Path, map_location: str | torch.device = "cpu") 
     path = Path(path)
     if not path.is_file():
         raise FileNotFoundError(f"Checkpoint not found: {path}")
-    # weights_only=True: checkpoints only contain tensors and plain Python containers,
-    # so loading never executes arbitrary pickled code.
+    # checkpoints hold only tensors and plain containers, so no pickled code is executed
     return torch.load(path, map_location=map_location, weights_only=True)
 
 
@@ -89,11 +76,7 @@ def sliding_window_logits(
     model: nn.Module, image: torch.Tensor, cfg: Config, device: torch.device, use_amp: bool,
     tta: str = "none",
 ) -> torch.Tensor:
-    """Logits (B, K, *spatial) for a (B, C, *spatial) volume of arbitrary size.
-
-    ``tta`` averages the logits of several flipped passes (each flipped back); training-time validation
-    leaves it at ``none``, evaluation and prediction use ``cfg.inference.tta``.
-    """
+    """Logits (B, K, *spatial) for a (B, C, *spatial) volume; ``tta`` averages flipped passes."""
     base = torch.as_tensor(image)
     passes = tta_flip_sets(tta)
     total = None
@@ -145,16 +128,12 @@ def predict_case(
     device: torch.device,
     use_amp: bool,
 ) -> np.ndarray:
-    """Predict a canonical label map (uint8) in the *original* voxel grid of the input files.
-
-    ``data`` is the output of ``transforms`` for a single case (un-batched), so
-    ``data["image"]`` is a MetaTensor carrying the applied spatial operations.
-    """
+    """Canonical label map (uint8) in the original voxel grid; ``data`` is the un-batched ``transforms`` output."""
     image = data["image"]
     if not isinstance(image, MetaTensor) or "spatial_shape" not in image.meta:
         raise TypeError("predict_case expects the MetaTensor produced by build_eval_transforms")
     logits = sliding_window_logits(model, image.unsqueeze(0), cfg, device, use_amp, tta=cfg.inference.tta)
-    # Must be a MetaTensor: for plain tensors Invertd only warns and skips the inversion.
+    # Invertd silently skips plain tensors
     probabilities = MetaTensor(probabilities_from_logits(logits, cfg.model.output)[0].cpu())
     inverter = Invertd(keys="pred", transform=transforms, orig_keys="image", nearest_interp=False)
     inverted = torch.as_tensor(inverter({**data, "pred": probabilities})["pred"])
@@ -231,7 +210,7 @@ def run_inference(
     logger = get_logger()
     device = select_device(device_name)
     model, cfg, profile, ckpt = load_trained_model(checkpoint, device)
-    if overrides:  # inference-time options only, e.g. inference.tta=flips3
+    if overrides:
         cfg = apply_overrides(cfg, overrides)
     discovery = discover_cases(
         input_dir, cfg.data.modalities, require_label=False, modality_aliases=profile.modality_aliases

@@ -1,16 +1,6 @@
-"""Post-processing of predicted label maps.
+"""Post-processing of label maps: drop small tumour components, relabel a small ET as NCR.
 
-Two simple, standard clean-ups of a canonical label map (0 BG, 1 NCR, 2 ED, 3 ET):
-
-* **small components**: connected groups of tumour voxels (26-connectivity) smaller than
-  ``min_component_voxels`` are removed. Isolated specks are rarely real tumour but cost precision and HD95.
-* **small enhancing tumour**: if the predicted ET has fewer than ``et_min_voxels`` voxels it is relabelled
-  as necrosis/non-enhancing core (NCR). A tiny enhancing prediction is usually noise, and relabelling
-  turns a false-positive ET into an (almost always) harmless TC voxel set. This follows a trick used by
-  BraTS challenge participants.
-
-Both thresholds default to 0 (disabled). They are tuned on the VALIDATION set with
-``scripts/tune_postprocessing.py``; they must never be tuned on the test set.
+Thresholds are tuned on the validation set (``scripts/tune_postprocessing.py``); 0 disables a step.
 """
 
 from __future__ import annotations

@@ -1,11 +1,6 @@
-"""Tabulate training runs and show which config keys differ from a baseline run.
+"""Tabulate the best validation metrics of several runs and the config keys that differ from the first.
 
-Controlled comparisons should change one thing at a time; this script makes
-that visible by listing every config key that differs from the baseline.
-It reports *validation* metrics only - test metrics are for the final model.
-
-Example:
-    python scripts/compare_runs.py outputs/runs/baseline outputs/runs/patch_128 outputs/runs/lr_1e-3
+    python scripts/compare_runs.py outputs/runs/baseline outputs/runs/patch_128
 """
 
 from __future__ import annotations

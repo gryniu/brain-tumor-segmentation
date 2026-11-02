@@ -1,8 +1,4 @@
-# Experiment 3: region-based training on top of colab_t4_full.yaml. The network has 3 sigmoid outputs
-# (ET, TC, WT) trained with Dice + binary cross-entropy on the nested regions, as in nnU-Net's BraTS setup,
-# instead of 4 softmax classes. Decoding: threshold at 0.5, nest ET in TC in WT.
-# Whether this helps on this data is unknown: compare validation Dice with colab_t4_full.yaml
-# (scripts/compare_runs.py, scripts/compare_eval.py), same epochs and seed.
+# colab_t4_full.yaml with region-based training: sigmoid ET/TC/WT outputs, Dice + BCE.
 _base_: colab_t4_full.yaml
 
 model:

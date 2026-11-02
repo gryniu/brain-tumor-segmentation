@@ -157,7 +157,7 @@ Source: `eval_test/summary.md` of this run. Dice uses the BraTS convention that 
 excluded from the means: HD95 is based on 191 (ET), 193 (TC) and 194 (WT) cases, sensitivity on 189 / 193 / 194 and
 precision on 192 / 192 / 194.
 
-**How to read this honestly**
+**Notes**
 
 * This is a deliberately small run: a 5.65 M-parameter model, 96³ patches, **250 of 874 training cases**, 20 epochs
   (about 35 minutes on a free T4). It is a baseline, not the best this code can do.
@@ -178,8 +178,7 @@ precision on 192 / 192 / 194.
 | [docs/reference.md](docs/reference.md) | Full reference: dataset, method, installation, workflow, hardware settings, experiments, limitations |
 | [docs/methodology.md](docs/methodology.md) | Why the pipeline is built this way; evaluation protocol |
 | [docs/cloud_gpu.md](docs/cloud_gpu.md) | Renting a GPU, persistence, exact cloud commands |
-| [docs/data_report.md](docs/data_report.md) | Measured facts about the downloaded BraTS data and the T4 benchmark |
-| [docs/improvements_report.md](docs/improvements_report.md) | What was changed in the code review and why |
+| [docs/data_report.md](docs/data_report.md) | Dataset facts and the T4 benchmark |
 
 ## Repository layout
 

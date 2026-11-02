@@ -1,9 +1,6 @@
-"""Synthetic BraTS-*like* volumes for UNIT TESTS ONLY.
+"""Synthetic BraTS-like phantoms for unit tests only (ellipsoidal brain with a nested lesion).
 
-These are geometric phantoms (ellipsoidal "brain" with a nested lesion), NOT MRI data. They exist
-only to test software components (shapes, label conversion, I/O, resume logic) without BraTS.
-Never train, validate or report metrics with them: every dataset written here carries a marker
-file that makes brain_seg refuse it unless BRAIN_SEG_ALLOW_SYNTHETIC=1 (set by tests/conftest.py).
+Every dataset written here carries a marker file that brain_seg refuses unless BRAIN_SEG_ALLOW_SYNTHETIC=1.
 """
 
 from __future__ import annotations

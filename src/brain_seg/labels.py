@@ -1,25 +1,8 @@
-"""Canonical label definitions and tumour sub-region derivation.
+"""Canonical classes and BraTS evaluation regions.
 
-Different BraTS releases encode the same tissue classes with different integer
-IDs (e.g. enhancing tumour is ``4`` in BraTS 2018-2021 but ``3`` in BraTS 2023).
-Everything inside this project works with a *canonical* encoding and only
-converts back to the dataset's own convention when writing predictions to disk:
-
-====  ==========  ============================================================
-ID    Short name  Meaning
-====  ==========  ============================================================
-0     BG          Background (healthy tissue and everything outside the brain)
-1     NCR         Necrotic / non-enhancing tumour core (NETC in BraTS 2023)
-2     ED          Peritumoural oedema / non-enhancing FLAIR hyperintensity (SNFH)
-3     ET          Gadolinium-enhancing tumour
-====  ==========  ============================================================
-
-The evaluation regions used by the BraTS challenge are *nested unions* of these
-classes, not individual labels:
-
-* ET (enhancing tumour)  = {ET}
-* TC (tumour core)       = {NCR, ET}
-* WT (whole tumour)      = {NCR, ED, ET}
+Canonical IDs: 0 BG, 1 NCR (necrosis / non-enhancing core), 2 ED (oedema), 3 ET (enhancing tumour).
+Datasets use their own IDs (ET is 4 in BraTS 2018-2021, 3 in 2023) and are mapped on load.
+Regions are nested unions: ET = {ET}, TC = {NCR, ET}, WT = {NCR, ED, ET}.
 """
 
 from __future__ import annotations
@@ -36,11 +19,6 @@ REGION_CLASSES: dict[str, tuple[int, ...]] = {
     "ET": (3,),
     "TC": (1, 3),
     "WT": (1, 2, 3),
-}
-REGION_DESCRIPTIONS: dict[str, str] = {
-    "ET": "Enhancing tumour",
-    "TC": "Tumour core (necrosis + enhancing tumour)",
-    "WT": "Whole tumour (necrosis + oedema + enhancing tumour)",
 }
 
 
@@ -131,11 +109,7 @@ def region_targets(label: torch.Tensor) -> torch.Tensor:
 
 
 def labels_from_region_masks(masks: torch.Tensor, dim: int = 1) -> torch.Tensor:
-    """Decode boolean ET/TC/WT masks (channel order ``REGIONS``) into a canonical label map.
-
-    The regions are nested by definition (ET inside TC inside WT), so the masks are made consistent first
-    (TC |= ET, WT |= TC); then WT-only voxels are ED, TC-only are NCR and ET voxels are ET.
-    """
+    """Boolean ET/TC/WT masks -> canonical labels, enforcing nesting (TC |= ET, WT |= TC)."""
     et, tc, wt = (m.bool() for m in masks.unbind(dim))
     tc = tc | et
     wt = wt | tc

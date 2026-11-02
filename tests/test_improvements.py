@@ -1,7 +1,4 @@
-"""Region-based training, test-time augmentation, post-processing, bootstrap intervals and failure analysis.
-
-Software tests on synthetic phantoms and made-up numbers: they show the code is consistent, nothing more.
-"""
+"""Region outputs, TTA, post-processing, bootstrap intervals and failure analysis."""
 
 from __future__ import annotations
 
@@ -40,7 +37,7 @@ def test_region_targets_and_decoding_round_trip():
 
 
 def test_region_decoding_enforces_nesting():
-    # an inconsistent prediction (ET without TC, TC without WT) must still decode to valid, nested labels
+    # inconsistent regions still decode to nested labels
     masks = torch.zeros(1, 3, 1, 1, 3, dtype=torch.bool)
     masks[0, 0, 0, 0, 0] = True          # ET only
     masks[0, 1, 0, 0, 1] = True          # TC only
@@ -160,7 +157,7 @@ def test_cluster_bootstrap_ci_properties():
     assert ci["ci_low"] < ci["mean"] < ci["ci_high"] and ci["n"] == 60 and ci["n_groups"] == 30
     assert ci == cluster_bootstrap_ci(values, groups, n_boot=500)             # seeded: reproducible
     assert np.isnan(cluster_bootstrap_ci([np.nan], [0])["mean"])               # no finite values
-    # ignoring the pairing of scans would give a narrower interval than patient-level resampling
+    # resampling patients widens the interval for correlated scans
     correlated = np.repeat(rng.normal(0.8, 0.1, 30), 2)
     wide = cluster_bootstrap_ci(correlated, groups, n_boot=500)
     narrow = cluster_bootstrap_ci(correlated, np.arange(60), n_boot=500)

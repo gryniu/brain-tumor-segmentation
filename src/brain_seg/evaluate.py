@@ -1,20 +1,7 @@
-"""Held-out evaluation of a trained checkpoint on full volumes in the original voxel space.
+"""Held-out evaluation of a checkpoint on full volumes in the original voxel space.
 
-For each case of the chosen subset (default: ``test``) of the run's own split:
-
-1. preprocess the modalities exactly as during validation (image only);
-2. sliding-window inference -> softmax probabilities in the preprocessed space;
-3. invert crop/resampling/reorientation back to the original voxel grid;
-4. argmax -> canonical label map; load the reference mask *from disk* in its
-   original grid and convert it to canonical classes;
-5. derive binary ET/TC/WT masks from both and compute Dice, IoU, sensitivity,
-   precision and (optionally) HD95.
-
-Outputs in ``<run_dir>/eval_<subset>/``: ``per_case_metrics.csv``,
-``summary.json``, ``summary.md``, ``predictions/*.nii.gz`` and ``figures/``.
-
-The test subset must only be evaluated once a model has been chosen with the
-validation set; it is never used during training or model selection.
+Writes ``per_case_metrics.csv``, ``summary.json``, ``summary.md``, predictions and figures to
+``<run_dir>/eval_<subset>/``. The test subset is for the final model only.
 """
 
 from __future__ import annotations
@@ -25,9 +12,7 @@ from pathlib import Path
 from typing import Any
 
 import nibabel as nib
-import numpy as np
 import pandas as pd
-import torch
 from monai.data import DataLoader, Dataset, decollate_batch
 
 from .config import apply_overrides
@@ -130,7 +115,7 @@ def evaluate(
 
     device = select_device(device_name)
     model, cfg, profile, ckpt = load_trained_model(checkpoint, device)
-    if overrides:  # inference-time options only, e.g. inference.tta=flips3
+    if overrides:
         cfg = apply_overrides(cfg, overrides)
     use_amp = resolve_amp(cfg.train.amp, cfg.train.amp_dtype, device)
     if data_root:

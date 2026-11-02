@@ -1,22 +1,8 @@
-"""Region-based segmentation metrics (ET / TC / WT) with explicit empty-mask conventions.
+"""Region metrics (ET / TC / WT) and their aggregation.
 
-Metrics are always computed on *binary region masks* derived from canonical
-label maps (see :mod:`brain_seg.labels`), never on raw label IDs.
-
-Empty-mask conventions (documented in docs/methodology.md):
-
-==========================  ======  ======  ===========  =========  ========
-Case                        Dice    IoU     Sensitivity  Precision  HD95
-==========================  ======  ======  ===========  =========  ========
-reference & prediction = 0  1.0     1.0     NaN          NaN        0.0
-reference = 0, pred > 0     0.0     0.0     NaN          0.0        NaN
-reference > 0, pred = 0     0.0     0.0     0.0          NaN        NaN
-==========================  ======  ======  ===========  =========  ========
-
-Dice/IoU follow the BraTS challenge convention (a correctly empty prediction is
-a perfect score). Sensitivity and precision are undefined (NaN) when their
-denominator is zero; HD95 is undefined when exactly one mask is empty. NaNs are
-excluded from aggregate statistics and the number of valid values is reported.
+Empty masks: Dice/IoU are 1 if reference and prediction are both empty and 0 if only one is; sensitivity
+(precision) is NaN for an empty reference (prediction); HD95 is 0 if both are empty and NaN if only one is.
+NaNs are excluded from aggregates.
 """
 
 from __future__ import annotations
@@ -154,12 +140,7 @@ def _cluster_sums(values: Sequence[float], groups: Sequence[Any]) -> tuple[np.nd
 def cluster_bootstrap_ci(
     values: Sequence[float], groups: Sequence[Any], n_boot: int = 2000, seed: int = 0, alpha: float = 0.05
 ) -> dict[str, float]:
-    """Mean with a percentile bootstrap confidence interval, resampling whole *patients*.
-
-    BraTS patients can have several scans (time points), which are correlated; resampling cases
-    independently would give intervals that are too narrow. Non-finite values are ignored; ``n`` is the
-    number of finite cases and ``n_groups`` the number of patients they come from.
-    """
+    """Mean and percentile bootstrap CI, resampling whole patients (scans of one patient are correlated)."""
     sums, counts = _cluster_sums(values, groups)
     if len(sums) == 0:
         return {"mean": NAN, "ci_low": NAN, "ci_high": NAN, "n": 0, "n_groups": 0}
@@ -177,11 +158,7 @@ def paired_cluster_bootstrap(
     a: Sequence[float], b: Sequence[float], groups: Sequence[Any], n_boot: int = 5000, seed: int = 0,
     alpha: float = 0.05,
 ) -> dict[str, float]:
-    """Mean paired difference ``a - b`` per case with a patient-level bootstrap interval.
-
-    Cases are paired by position (same cases, same order). Pairs where either value is not finite are
-    dropped. ``p_a_better`` is the fraction of bootstrap resamples in which the mean difference is > 0.
-    """
+    """Mean paired difference ``a - b`` (same cases, same order) with a patient-level bootstrap CI."""
     a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
     if a.shape != b.shape:
         raise ValueError("Paired comparison needs the same cases in the same order")

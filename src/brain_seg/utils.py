@@ -63,12 +63,7 @@ def select_device(requested: str = "auto") -> torch.device:
 
 
 def resolve_amp(enabled: bool, dtype: str, device: torch.device) -> bool:
-    """Decide whether mixed precision is actually used on ``device``.
-
-    AMP is applied only on CUDA. On Apple MPS, float16 autocast for 3D convolutions
-    is less mature and gives little speed-up for training, and on CPU it is
-    slower than float32, so both always train in float32.
-    """
+    """Mixed precision is used on CUDA only; MPS and CPU train in float32."""
     if not enabled or device.type != "cuda":
         return False
     if dtype == "bfloat16" and not torch.cuda.is_bf16_supported():
@@ -92,8 +87,7 @@ def seed_everything(seed: int, deterministic: bool = False) -> None:
 
     set_determinism(seed=seed, use_deterministic_algorithms=deterministic)
     if not deterministic and torch.cuda.is_available():
-        # set_determinism(seed=...) disables cuDNN autotuning; re-enable it for speed when
-        # bitwise reproducibility was not requested.
+        # set_determinism disables cuDNN autotuning
         torch.backends.cudnn.deterministic = False
         torch.backends.cudnn.benchmark = True
 

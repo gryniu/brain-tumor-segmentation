@@ -1,12 +1,6 @@
-"""Inspect a BraTS-style dataset before training.
+"""Inspect a BraTS-style dataset: cases, label convention, geometry, patients and label statistics.
 
-Reports discovered/incomplete cases, unrecognised files, the detected label
-convention (from real mask values), geometry (shapes, spacings, orientations),
-patient grouping and label voxel statistics. Nothing is modified.
-
-Examples:
     python scripts/inspect_dataset.py --data-root /data/BraTS2021_Training_Data
-    python scripts/inspect_dataset.py --config configs/default.yaml --max-label-cases 0   # all masks
 """
 
 from __future__ import annotations

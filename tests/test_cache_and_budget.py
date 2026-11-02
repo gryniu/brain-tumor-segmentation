@@ -1,4 +1,4 @@
-"""Compact ``npy`` disk cache and the wall-time budget of the training loop (synthetic phantoms, tests only)."""
+"""Compact npy cache and the training time cap."""
 
 from __future__ import annotations
 
@@ -32,7 +32,7 @@ def test_npy_cache_matches_uncached_preprocessing(brats2021_root, tmp_path):
         assert cached["image"].dtype == torch.float32 and cached["label"].dtype == torch.float32
         assert tuple(cached["image"].shape) == tuple(reference["image"].shape)
         assert torch.equal(cached["label"], torch.as_tensor(reference["label"]))  # uint8 storage is lossless
-        # float16 has a relative error of ~5e-4: far below anything that matters for z-scored MRI
+        # float16 rounding
         assert torch.allclose(cached["image"], torch.as_tensor(reference["image"]), rtol=2e-3, atol=2e-3)
         assert cached["case_id"] == item["case_id"]
     assert len(list((tmp_path / "cache").glob("*_image.npy"))) == len(items)

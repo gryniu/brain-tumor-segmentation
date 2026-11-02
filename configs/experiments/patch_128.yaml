@@ -1,4 +1,4 @@
-# Controlled experiment: ONE change relative to configs/default.yaml (larger patches: more context, ~2x memory).
+# One change vs default.yaml (larger patches: more context, ~2x memory).
 _base_: ../default.yaml
 run_name: patch_128
 train:

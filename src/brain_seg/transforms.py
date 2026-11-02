@@ -1,22 +1,8 @@
 """MONAI transform pipelines for training, validation and inference.
 
-Shapes (C = number of modalities, K = 4 canonical classes):
-
-* after loading:      image (C, X, Y, Z) float32, label (1, X, Y, Z) canonical IDs 0-3
-* training samples:   image (C, *patch), label (1, *patch)
-* after collation:    image (B * samples_per_volume, C, *patch)
-
-Deterministic preprocessing (identical for train/val/test/inference):
-
-1. Load each modality as one channel (fixed canonical order) + mask.
-2. Convert raw label IDs to canonical classes (raises on unknown labels).
-3. Reorient to RAS so that axes have a consistent anatomical meaning.
-4. Resample to ``data.target_spacing`` (bilinear for images, nearest for masks).
-5. Crop to the brain bounding box (non-zero voxels in any modality).
-6. Z-score each modality using only brain voxels (background stays 0).
-
-Steps 3-5 are invertible; :func:`brain_seg.inference.predict_case` uses MONAI's
-``Invertd`` to map predictions back to the original voxel grid.
+Deterministic preprocessing (shared by all pipelines): load modalities as channels, map labels to canonical
+classes, reorient to RAS, resample, crop to the brain, z-score over brain voxels. Reorientation, resampling
+and cropping are inverted after inference (:func:`brain_seg.inference.predict_case`).
 """
 
 from __future__ import annotations
@@ -110,19 +96,12 @@ def augmentation_transforms(cfg: Config) -> list:
 
 
 def sampling_and_augmentation_transforms(cfg: Config) -> list:
-    """Random part of the training pipeline: pad, class-balanced patch crop, augmentation.
-
-    Runs after :func:`preprocessing_transforms`. Everything before the crop may be cached because it
-    is deterministic; everything from the crop on must run on every access.
-    """
+    """Random part of the training pipeline (runs after preprocessing): pad, class-balanced crop, augment."""
     keys = ["image", "label"]
     t = cfg.train
     return [
         SpatialPadd(keys=keys, spatial_size=t.patch_size),
-        # Patch centres are drawn per class with the given ratios (BG, NCR, ED, ET), so small
-        # tumour classes are seen far more often than their voxel share (~0.1-1%) suggests.
-        # Background centres are restricted to brain voxels (image > 0). Classes absent from a
-        # case are skipped by MONAI.
+        # patch centres drawn per class (BG, NCR, ED, ET); background centres only inside the brain
         RandCropByLabelClassesd(
             keys=keys,
             label_key="label",
@@ -134,8 +113,7 @@ def sampling_and_augmentation_transforms(cfg: Config) -> list:
             image_threshold=0.0,
             warn=False,
         ),
-        # Only the small patch is converted to float32 (a no-op for float32 input); the compact
-        # disk cache stores float16 images, and augmentation must not run in half precision.
+        # the npy cache stores float16; augment in float32
         EnsureTyped(keys="image", dtype=torch.float32),
         *augmentation_transforms(cfg),
         EnsureTyped(keys=keys, track_meta=False),

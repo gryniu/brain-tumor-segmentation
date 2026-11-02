@@ -1,21 +1,10 @@
-"""Download the BraTS 2023 Adult Glioma (BraTS-GLI) TRAINING data from Synapse, after YOU have
-requested access and accepted the data terms. Run it yourself; nothing runs it automatically.
+"""Download the BraTS 2023 Adult Glioma training archive from Synapse and verify it.
 
-Before running (once, in a browser, as yourself):
-  1. Log in / register at https://www.synapse.org
-  2. Open https://www.synapse.org/Synapse:syn64952532 and click "Request Access"; read and accept the
-     post-challenge terms (CC-BY-NC 4.0: non-commercial use only, attribution required).
-  3. Create a personal access token (Account Settings -> Personal Access Tokens) with "View" and
-     "Download" scopes.
+Requires access granted at https://www.synapse.org/Synapse:syn64952532 (CC-BY-NC 4.0) and a personal
+access token with View and Download scopes:
 
-Then export the token and run (the token is read from the environment so it never lands in shell
-history or in this repository; never paste it into a chat or commit it):
-    export SYNAPSE_AUTH_TOKEN=...            # PowerShell: $env:SYNAPSE_AUTH_TOKEN="..."
+    export SYNAPSE_AUTH_TOKEN=...
     python scripts/download_brats.py --output-dir /path/to/data
-
-Only the training archive is fetched: it is the only archive with expert masks. The validation
-archive has no masks, so it cannot be used for local evaluation. The archive is verified and
-unpacked, then the same checks as scripts/inspect_dataset.py are run on the result.
 """
 
 from __future__ import annotations

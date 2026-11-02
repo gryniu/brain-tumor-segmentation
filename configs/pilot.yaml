@@ -1,7 +1,4 @@
-# Short REAL-data pilot (run this on the real BraTS download BEFORE renting a GPU for the full run).
-# Purpose: confirm that the loss decreases and that validation Dice is computed from real MRI and
-# real masks, on a small slice of the training/validation subsets of the same patient-level split
-# used by the full run (the test subset is untouched). Pilot metrics are NOT results.
+# Short real-data sanity run on a small part of the training/validation split. Not a result.
 _base_: local_mps.yaml
 
 train:

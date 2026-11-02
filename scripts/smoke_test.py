@@ -1,14 +1,7 @@
-"""Data-loading and model smoke test on the real dataset (no training run is started).
+"""Smoke test on the real dataset: a few batches through the training pipeline, one forward/backward pass
+(peak GPU memory on CUDA), one sliding-window prediction and, with --bench-steps, training throughput.
 
-Loads a few training batches through the exact training pipeline, checks tensor
-shapes, dtypes and label values, times the loader, runs one forward/backward
-pass on the configured device (reporting peak GPU memory on CUDA), one
-full-volume sliding-window prediction on a validation case, and (--bench-steps)
-measures real training throughput so you can budget a run from measurements on
-the GPU you actually rented.
-
-Example:
-    python scripts/smoke_test.py --config configs/default.yaml --data-root /data/BraTS2021 --num-batches 3
+    python scripts/smoke_test.py --config configs/default.yaml --data-root /data/BraTS --num-batches 3
 """
 
 from __future__ import annotations
