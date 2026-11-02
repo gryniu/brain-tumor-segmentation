@@ -522,6 +522,50 @@ in this order:
 
 ---
 
+## Improvement toolkit
+
+All options are off by default, so existing configs and checkpoints behave as before.
+
+**Region-based training (`model.output: regions`).** The default model predicts 4 mutually exclusive classes with a softmax.
+In `regions` mode the network has 3 sigmoid outputs, one per nested BraTS region (ET, TC, WT). The loss is Dice + binary
+cross-entropy on the region masks derived from the labels (`loss.name: dice_ce`; `dice` gives Dice only; class weights are not
+supported). Prediction thresholds each output at 0.5, makes the regions consistent (TC |= ET, WT |= TC) and decodes
+WT-only voxels as ED, TC-only as NCR and ET as ET. The mode is stored in the checkpoint, so `evaluate.py` and `predict.py`
+need no extra flags.
+
+**Test-time augmentation (`inference.tta`).** `flips3` averages the logits of the original volume and one flip along each axis
+(4 passes); `flips8` uses all 8 flip combinations. It multiplies inference time by 4 or 8 and is used by `evaluate.py` /
+`predict.py` only, never by the validation inside training. The training augmentation already flips all three axes.
+
+**Post-processing (`inference.postprocess_*`).** `postprocess_min_component_voxels` removes connected tumour components smaller
+than the threshold; `postprocess_et_min_voxels` relabels a predicted ET smaller than the threshold as NCR. Tune both on the
+validation set:
+
+```bash
+python scripts/tune_postprocessing.py --checkpoint outputs/runs/<run>/checkpoints/best.pt --data-root "$DATA" --limit 60
+```
+
+The script refuses the test set, prints a grid of mean Dice values with the unprocessed baseline, and writes
+`postprocess_tuning_val_tta-<mode>.md/json` into the run directory. A gain of a few thousandths may be noise.
+
+**Inference-time overrides.** `evaluate.py` and `predict.py` accept `--set key=value` for the `inference.*` options, for example
+`--set inference.tta=flips3 inference.postprocess_et_min_voxels=100`. The settings used are recorded in `summary.json/md`.
+
+**Confidence intervals and comparisons.** `summary.md` of every evaluation now contains 95% intervals from a bootstrap that
+resamples whole patients (several scans of one patient are correlated). To compare two evaluations on the same cases use
+`scripts/compare_eval.py`; it reports the mean paired difference, its interval and the share of bootstrap resamples in which A beats B.
+Run it on validation evaluations (`evaluate.py --subset val`); the test set is for the final model.
+
+**Failure analysis.** `scripts/analyze_failures.py --eval-dir <dir>` classifies every region with Dice below 0.5 as missed,
+under-segmented, over-segmented, misplaced or a false positive on an empty reference, relates Dice to the reference volume and lists
+the ten worst cases. It uses only `per_case_metrics.csv`, so its output contains no patient images.
+
+**Configs.** `configs/colab_t4_full.yaml` (all training cases), `colab_t4_large.yaml` (128³ patches, 16.6 M parameters),
+`colab_t4_regions.yaml` (region-based training) and `colab_t4_all.yaml` (all three). Change one thing at a time and compare on
+validation before combining; the time and disk numbers in these files are planning estimates, not measurements.
+
+---
+
 ## Experiments
 
 **Baseline first.** Train `default.yaml` (or `cloud_cuda.yaml`) unchanged and evaluate it on the

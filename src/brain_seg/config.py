@@ -51,6 +51,10 @@ class ModelConfig:
     features: list[int] = field(default_factory=lambda: [16, 32, 64, 128, 256])
     norm: str = "instance"  # instance | batch | group
     dropout: float = 0.0
+    # softmax: 4 mutually exclusive classes (BG/NCR/ED/ET), argmax decoding.
+    # regions: 3 sigmoid outputs for the nested BraTS regions ET, TC, WT (the metrics' own targets),
+    #          decoded by thresholding at 0.5 and nesting (ET inside TC inside WT).
+    output: str = "softmax"
 
 
 @dataclass
@@ -115,6 +119,13 @@ class InferenceConfig:
     sw_batch_size: int = 1
     blend_mode: str = "gaussian"  # gaussian | constant
     stitch_on_cpu: bool = False  # assemble full-volume logits in CPU RAM to save GPU memory
+    # Test-time augmentation for evaluate/predict (never during training-time validation):
+    # none | flips3 (original + one flip per axis, 4 passes) | flips8 (all 8 flip combinations).
+    tta: str = "none"
+    # Post-processing of the final label map (evaluate/predict); 0 disables. Tune on VALIDATION with
+    # scripts/tune_postprocessing.py, never on the test set.
+    postprocess_et_min_voxels: int = 0  # ET predicted with fewer voxels than this is relabelled NCR
+    postprocess_min_component_voxels: int = 0  # drop whole-tumour components smaller than this
 
 
 @dataclass
@@ -147,6 +158,12 @@ class Config:
             raise ConfigError(f"data.target_spacing must be null or 3 positive numbers: {d.target_spacing}")
         if m.name not in {"unet3d", "monai_unet"}:
             raise ConfigError(f"model.name must be unet3d|monai_unet, got {m.name!r}")
+        if m.output not in {"softmax", "regions"}:
+            raise ConfigError(f"model.output must be softmax|regions, got {m.output!r}")
+        if m.output == "regions" and lo.name not in {"dice_ce", "dice"}:
+            raise ConfigError("model.output=regions supports loss.name dice_ce (Dice + BCE) or dice only")
+        if m.output == "regions" and lo.class_weights is not None:
+            raise ConfigError("loss.class_weights is not supported with model.output=regions")
         if len(m.features) < 2 or any(f <= 0 for f in m.features):
             raise ConfigError(f"model.features needs >= 2 positive channel counts: {m.features}")
         if m.norm not in {"instance", "batch", "group"}:
@@ -182,6 +199,10 @@ class Config:
             raise ConfigError("inference.overlap must be in [0, 1)")
         if inf.blend_mode not in {"gaussian", "constant"}:
             raise ConfigError("inference.blend_mode must be gaussian|constant")
+        if inf.tta not in {"none", "flips3", "flips8"}:
+            raise ConfigError(f"inference.tta must be none|flips3|flips8, got {inf.tta!r}")
+        if inf.postprocess_et_min_voxels < 0 or inf.postprocess_min_component_voxels < 0:
+            raise ConfigError("inference.postprocess_* thresholds must be >= 0")
 
 
 def _deep_merge(base: dict, override: dict) -> dict:

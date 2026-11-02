@@ -1,0 +1,7 @@
+# Combination of experiments 1-3: all training cases, 128^3 patches, the 16.6M-parameter model and
+# region-based training. Use it only after the single-change runs show which parts help; a combination can
+# also hurt. Planning estimate for time: see colab_t4_large.yaml (about 10 minutes per epoch after caching).
+_base_: colab_t4_large.yaml
+
+model:
+  output: regions

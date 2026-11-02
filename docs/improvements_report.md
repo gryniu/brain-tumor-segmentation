@@ -58,3 +58,39 @@
 
 Brak. Jedyne liczby jakości to metryki walidacyjne z pilota (40 przypadków, 12 epok, walidacja na 10
 przypadkach): średni Dice 0,601 w epoce 12. To kontrola poprawności, nie wynik projektu.
+
+---
+
+# Część 2: zestaw usprawnień przed pełnym treningiem (2026-11-02)
+
+Zaimplementowane i przetestowane jednostkowo (86 testów przechodzi, w tym 18 nowych w `tests/test_improvements.py` i 4 sprawdzenia nowych plików konfiguracji).
+**Nic z tego nie było jeszcze trenowane ani mierzone na prawdziwych danych ani na GPU.** Wynik bazowy w README
+(Dice ET 0,825 / TC 0,871 / WT 0,903) pochodzi z modelu bez żadnej z tych zmian.
+
+| # | Pomysł | Co zrobiłam | Gdzie |
+|---|---|---|---|
+| 1 | Więcej danych i epok | Konfiguracja na wszystkie 874 przypadki, 60 przypadków do wyboru modelu, limit czasu | `configs/colab_t4_full.yaml` |
+| 2 | Większy patch i model | Patch 128³, 16,6 mln parametrów | `configs/colab_t4_large.yaml` |
+| 3 | Post-processing | Usuwanie małych składowych, mały ET przeklasyfikowany na NCR, skrypt do strojenia progów **na walidacji** (zbiór testowy jest odrzucany) | `src/brain_seg/postprocess.py`, `tuning.py`, `scripts/tune_postprocessing.py` |
+| 4 | TTA | Uśrednianie logitów po odbiciach (`flips3` lub `flips8`), tylko w evaluate/predict | `inference.tta` w `src/brain_seg/inference.py` |
+| 5 | Trening na regionach | 3 wyjścia sigmoid (ET/TC/WT), strata Dice + BCE, dekodowanie z progiem 0,5 i zagnieżdżaniem | `model.output: regions` (`labels.py`, `losses.py`, `model.py`, `train.py`, `inference.py`) |
+| 6 | Analiza porażek | Klasyfikacja porażek (pominięty, za mały, za duży, w złym miejscu, fałszywy alarm), zależność Dice od objętości, 10 najgorszych przypadków; tylko liczby, bez obrazów pacjentów | `scripts/analyze_failures.py`, `src/brain_seg/analysis.py` |
+| 7 | Rzetelność oceny | 95% przedziały ufności z bootstrapu **po pacjentach** (skany tego samego pacjenta są skorelowane), porównanie parami dwóch przebiegów | `summary.md`, `scripts/compare_eval.py` |
+
+Dodatkowo: `evaluate.py` i `predict.py` przyjmują `--set inference.*=...`, a użyte ustawienia zapisują się w podsumowaniu.
+Domyślne wartości nowych opcji niczego nie zmieniają, więc stare konfiguracje i checkpointy działają jak wcześniej.
+
+## Weryfikacja
+
+* Wszystkie 86 testów przechodzi. Test TTA wykrywa błąd: po usunięciu odwracania odbicia dwa testy TTA przestają przechodzić
+  (sprawdzone, potem cofnięte).
+* Dekodowanie regionów jest odwracalne dla każdej mapy etykiet, a niespójne predykcje (ET bez TC itp.) dają poprawne,
+  zagnieżdżone etykiety.
+* Metryki na przyciętym obszarze w strojeniu post-processingu są takie same jak na całym wolumenie.
+
+## Czego nie wiem
+
+* Czy którakolwiek z tych zmian poprawia model na prawdziwych danych. Trzeba to zmierzyć na **walidacji**, jedna zmiana naraz.
+* Ile czasu i miejsca na dysku zajmą pełne dane i większy model na T4. Liczby w nowych konfiguracjach to szacunki z poprzednich
+  pomiarów (78 s na epokę dla 250 przypadków, 4,78 GB pamięci GPU dla 128³), nie pomiary.
+* Czy trening na regionach jest lepszy niż softmax w tym projekcie: w nnU-Net jest standardem, ale tu nie jest sprawdzony.

@@ -119,3 +119,28 @@ def invert_label_map(raw_to_canonical: Mapping[int, int]) -> dict[int, int]:
     if missing:
         raise ValueError(f"Label mapping does not cover canonical classes {sorted(missing)}")
     return inverse
+
+
+def region_targets(label: torch.Tensor) -> torch.Tensor:
+    """Canonical labels (B, 1, ...) -> float ET/TC/WT region masks (B, 3, ...), channel order ``REGIONS``."""
+    labels = label.long()
+    channels = [
+        torch.isin(labels, torch.tensor(REGION_CLASSES[region], device=labels.device)) for region in REGIONS
+    ]
+    return torch.cat(channels, dim=1).float()
+
+
+def labels_from_region_masks(masks: torch.Tensor, dim: int = 1) -> torch.Tensor:
+    """Decode boolean ET/TC/WT masks (channel order ``REGIONS``) into a canonical label map.
+
+    The regions are nested by definition (ET inside TC inside WT), so the masks are made consistent first
+    (TC |= ET, WT |= TC); then WT-only voxels are ED, TC-only are NCR and ET voxels are ET.
+    """
+    et, tc, wt = (m.bool() for m in masks.unbind(dim))
+    tc = tc | et
+    wt = wt | tc
+    out = torch.zeros(et.shape, dtype=torch.long, device=et.device)
+    out[wt] = 2
+    out[tc] = 1
+    out[et] = 3
+    return out

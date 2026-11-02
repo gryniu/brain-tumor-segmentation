@@ -29,6 +29,7 @@ import torch
 from torch import nn
 
 from .config import ModelConfig
+from .labels import REGIONS
 
 
 def _norm(norm: str, channels: int) -> nn.Module:
@@ -130,6 +131,8 @@ class UNet3D(nn.Module):
 
 def build_model(cfg: ModelConfig, in_channels: int, out_channels: int) -> nn.Module:
     """Create the configured network. ``monai_unet`` is MONAI's residual U-Net, for comparison."""
+    if cfg.output == "regions":
+        out_channels = len(REGIONS)  # one sigmoid channel per nested region (ET, TC, WT)
     if cfg.name == "unet3d":
         return UNet3D(in_channels, out_channels, cfg.features, cfg.norm, cfg.dropout)
     if cfg.name == "monai_unet":

@@ -32,10 +32,13 @@ from monai.inferers import sliding_window_inference
 from monai.transforms import Compose, Invertd
 from torch import nn
 
-from .config import Config, config_from_dict
+from .config import Config, apply_overrides, config_from_dict
 from .data import DatasetProfile, DatasetValidationError, check_case_geometry, discover_cases
-from .labels import CLASS_NAMES, NUM_CLASSES, REGION_CLASSES, REGIONS, invert_label_map
+from .labels import (
+    CLASS_NAMES, NUM_CLASSES, REGION_CLASSES, REGIONS, invert_label_map, labels_from_region_masks,
+)
 from .model import build_model
+from .postprocess import postprocess_labels
 from .transforms import build_eval_transforms
 from .utils import amp_context, get_logger, resolve_amp, select_device, setup_logging
 
@@ -70,11 +73,41 @@ def load_trained_model(
     return model, cfg, profile, ckpt
 
 
+def tta_flip_sets(mode: str) -> list[tuple[int, ...]]:
+    """Spatial dims (of a (B, C, X, Y, Z) tensor) to flip for each test-time-augmentation pass."""
+    if mode == "none":
+        return [()]
+    if mode == "flips3":
+        return [(), (2,), (3,), (4,)]
+    if mode == "flips8":
+        return [tuple(d for bit, d in zip((1, 2, 4), (2, 3, 4)) if mask & bit) for mask in range(8)]
+    raise ValueError(f"Unknown TTA mode {mode!r}")
+
+
 @torch.no_grad()
 def sliding_window_logits(
+    model: nn.Module, image: torch.Tensor, cfg: Config, device: torch.device, use_amp: bool,
+    tta: str = "none",
+) -> torch.Tensor:
+    """Logits (B, K, *spatial) for a (B, C, *spatial) volume of arbitrary size.
+
+    ``tta`` averages the logits of several flipped passes (each flipped back); training-time validation
+    leaves it at ``none``, evaluation and prediction use ``cfg.inference.tta``.
+    """
+    base = torch.as_tensor(image)
+    passes = tta_flip_sets(tta)
+    total = None
+    for dims in passes:
+        flipped = base.flip(dims) if dims else base
+        logits = _sliding_window_once(model, flipped, cfg, device, use_amp)
+        logits = logits.flip(dims) if dims else logits
+        total = logits if total is None else total + logits
+    return total / len(passes)
+
+
+def _sliding_window_once(
     model: nn.Module, image: torch.Tensor, cfg: Config, device: torch.device, use_amp: bool
 ) -> torch.Tensor:
-    """Logits (B, K, *spatial) for a (B, C, *spatial) volume of arbitrary size."""
     stitch_device = torch.device("cpu") if cfg.inference.stitch_on_cpu else device
     with amp_context(device, use_amp, cfg.train.amp_dtype):
         logits = sliding_window_inference(
@@ -90,6 +123,18 @@ def sliding_window_logits(
     if isinstance(logits, MetaTensor):
         logits = logits.as_tensor()  # plain tensor: metadata is tracked on the input image
     return logits.float()
+
+
+def probabilities_from_logits(logits: torch.Tensor, output: str) -> torch.Tensor:
+    """Softmax over classes (``softmax`` mode) or independent sigmoids per region (``regions`` mode)."""
+    return torch.sigmoid(logits) if output == "regions" else torch.softmax(logits, dim=1)
+
+
+def labels_from_probabilities(probabilities: torch.Tensor, output: str, dim: int = 1) -> torch.Tensor:
+    """Canonical label map from probabilities: argmax, or thresholded and nested ET/TC/WT regions."""
+    if output == "regions":
+        return labels_from_region_masks(probabilities > 0.5, dim=dim)
+    return probabilities.argmax(dim=dim)
 
 
 def predict_case(
@@ -108,9 +153,9 @@ def predict_case(
     image = data["image"]
     if not isinstance(image, MetaTensor) or "spatial_shape" not in image.meta:
         raise TypeError("predict_case expects the MetaTensor produced by build_eval_transforms")
-    logits = sliding_window_logits(model, image.unsqueeze(0), cfg, device, use_amp)
+    logits = sliding_window_logits(model, image.unsqueeze(0), cfg, device, use_amp, tta=cfg.inference.tta)
     # Must be a MetaTensor: for plain tensors Invertd only warns and skips the inversion.
-    probabilities = MetaTensor(torch.softmax(logits, dim=1)[0].cpu())
+    probabilities = MetaTensor(probabilities_from_logits(logits, cfg.model.output)[0].cpu())
     inverter = Invertd(keys="pred", transform=transforms, orig_keys="image", nearest_interp=False)
     inverted = torch.as_tensor(inverter({**data, "pred": probabilities})["pred"])
     original_shape = tuple(int(s) for s in image.meta["spatial_shape"])
@@ -119,7 +164,11 @@ def predict_case(
             f"Inverting preprocessing gave shape {tuple(inverted.shape[1:])}, expected the original "
             f"{original_shape}; predictions would not align with the input images"
         )
-    return inverted.argmax(dim=0).numpy().astype(np.uint8)
+    labels = labels_from_probabilities(inverted, cfg.model.output, dim=0).numpy().astype(np.uint8)
+    inf = cfg.inference
+    if inf.postprocess_et_min_voxels or inf.postprocess_min_component_voxels:
+        labels = postprocess_labels(labels, inf.postprocess_et_min_voxels, inf.postprocess_min_component_voxels)
+    return labels
 
 
 def save_label_nifti(
@@ -176,11 +225,14 @@ def run_inference(
     case_id: str | None = None,
     label_convention: str = "dataset",
     make_figure: bool = True,
+    overrides: list[str] | None = None,
 ) -> dict[str, Any]:
     """Segment one patient folder and write NIfTI mask, JSON summary and overlay figure."""
     logger = get_logger()
     device = select_device(device_name)
     model, cfg, profile, ckpt = load_trained_model(checkpoint, device)
+    if overrides:  # inference-time options only, e.g. inference.tta=flips3
+        cfg = apply_overrides(cfg, overrides)
     discovery = discover_cases(
         input_dir, cfg.data.modalities, require_label=False, modality_aliases=profile.modality_aliases
     )
@@ -260,11 +312,13 @@ def main(argv: list[str] | None = None) -> None:
         help="'dataset' writes the training dataset's label IDs (e.g. ET=4 for BraTS 2021)",
     )
     parser.add_argument("--no-figure", action="store_true")
+    parser.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
+                        help="Inference-time overrides, e.g. inference.tta=flips3")
     args = parser.parse_args(argv)
     setup_logging()
     summary = run_inference(
         args.checkpoint, args.input_dir, args.output_dir, args.device, args.case_id,
-        args.label_convention, not args.no_figure,
+        args.label_convention, not args.no_figure, list(args.set),
     )
     print(f"\nCase {summary['case_id']}  (voxel spacing {summary['voxel_spacing_mm']} mm)")
     for region, stats in summary["regions"].items():

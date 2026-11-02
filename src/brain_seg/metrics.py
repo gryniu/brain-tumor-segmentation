@@ -134,3 +134,74 @@ def json_safe(value: Any) -> Any:
     if isinstance(value, float) and not math.isfinite(value):
         return None
     return value
+
+
+# --------------------------------------------------------------------------- uncertainty
+
+
+def _cluster_sums(values: Sequence[float], groups: Sequence[Any]) -> tuple[np.ndarray, np.ndarray]:
+    """Per-group sum and count of the finite values (groups with no finite value are dropped)."""
+    values = np.asarray(values, dtype=float)
+    groups = np.asarray(groups)
+    keep = np.isfinite(values)
+    values, groups = values[keep], groups[keep]
+    _, inverse = np.unique(groups, return_inverse=True)
+    sums = np.bincount(inverse, weights=values)
+    counts = np.bincount(inverse).astype(float)
+    return sums, counts
+
+
+def cluster_bootstrap_ci(
+    values: Sequence[float], groups: Sequence[Any], n_boot: int = 2000, seed: int = 0, alpha: float = 0.05
+) -> dict[str, float]:
+    """Mean with a percentile bootstrap confidence interval, resampling whole *patients*.
+
+    BraTS patients can have several scans (time points), which are correlated; resampling cases
+    independently would give intervals that are too narrow. Non-finite values are ignored; ``n`` is the
+    number of finite cases and ``n_groups`` the number of patients they come from.
+    """
+    sums, counts = _cluster_sums(values, groups)
+    if len(sums) == 0:
+        return {"mean": NAN, "ci_low": NAN, "ci_high": NAN, "n": 0, "n_groups": 0}
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(sums), size=(n_boot, len(sums)))
+    means = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    low, high = np.quantile(means, [alpha / 2, 1 - alpha / 2])
+    return {
+        "mean": float(sums.sum() / counts.sum()), "ci_low": float(low), "ci_high": float(high),
+        "n": int(counts.sum()), "n_groups": int(len(sums)),
+    }
+
+
+def paired_cluster_bootstrap(
+    a: Sequence[float], b: Sequence[float], groups: Sequence[Any], n_boot: int = 5000, seed: int = 0,
+    alpha: float = 0.05,
+) -> dict[str, float]:
+    """Mean paired difference ``a - b`` per case with a patient-level bootstrap interval.
+
+    Cases are paired by position (same cases, same order). Pairs where either value is not finite are
+    dropped. ``p_a_better`` is the fraction of bootstrap resamples in which the mean difference is > 0.
+    """
+    a, b = np.asarray(a, dtype=float), np.asarray(b, dtype=float)
+    if a.shape != b.shape:
+        raise ValueError("Paired comparison needs the same cases in the same order")
+    diff = a - b
+    sums, counts = _cluster_sums(diff, groups)
+    if len(sums) == 0:
+        return {"mean_diff": NAN, "ci_low": NAN, "ci_high": NAN, "p_a_better": NAN, "n": 0}
+    rng = np.random.default_rng(seed)
+    idx = rng.integers(0, len(sums), size=(n_boot, len(sums)))
+    means = sums[idx].sum(axis=1) / counts[idx].sum(axis=1)
+    low, high = np.quantile(means, [alpha / 2, 1 - alpha / 2])
+    return {
+        "mean_diff": float(sums.sum() / counts.sum()), "ci_low": float(low), "ci_high": float(high),
+        "p_a_better": float((means > 0).mean()), "n": int(counts.sum()),
+    }
+
+
+def confidence_intervals(frame: Any, columns: Sequence[str], n_boot: int = 2000) -> dict[str, dict[str, float]]:
+    """Patient-level bootstrap CIs for metric columns of a per-case table with a ``patient_id`` column."""
+    return {
+        c: cluster_bootstrap_ci(frame[c].to_numpy(dtype=float), frame["patient_id"].to_numpy(), n_boot)
+        for c in columns if c in frame
+    }

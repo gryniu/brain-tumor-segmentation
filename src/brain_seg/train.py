@@ -49,7 +49,9 @@ from .data import (
     prepare_cases,
     select_cases,
 )
-from .inference import load_checkpoint, sliding_window_logits
+from .inference import (
+    labels_from_probabilities, load_checkpoint, probabilities_from_logits, sliding_window_logits,
+)
 from .labels import NUM_CLASSES, REGIONS
 from .losses import build_loss
 from .metrics import compute_case_metrics
@@ -210,7 +212,8 @@ def validate(
         logits = sliding_window_logits(model, batch["image"], cfg, device, use_amp)
         label = torch.as_tensor(batch["label"]).to(logits.device)
         losses.append(loss_fn(logits, label).item())
-        pred = logits.argmax(dim=1)[0].cpu().numpy()
+        probabilities = probabilities_from_logits(logits, cfg.model.output)
+        pred = labels_from_probabilities(probabilities, cfg.model.output)[0].cpu().numpy()
         rows.append(compute_case_metrics(pred, label[0, 0].cpu().numpy()))
     if not rows:
         raise RuntimeError("Validation loader is empty")
@@ -319,7 +322,7 @@ def train(
 
     loaders = build_loaders(cfg, profile, cases, split)
     model = build_model(cfg.model, len(cfg.data.modalities), NUM_CLASSES).to(device)
-    loss_fn = build_loss(cfg.loss, NUM_CLASSES).to(device)
+    loss_fn = build_loss(cfg.loss, NUM_CLASSES, cfg.model.output).to(device)
     optimizer = build_optimizer(model, cfg)
     scheduler = build_scheduler(optimizer, cfg)
     scaler = torch.amp.GradScaler("cuda", enabled=use_amp and cfg.train.amp_dtype == "float16")

@@ -1,0 +1,17 @@
+# Experiment 1: ALL 874 training cases (instead of 250) on a Colab T4, otherwise identical to colab_t4_1h.yaml.
+#
+# Planning estimates, NOT measured on this setup: the first epoch builds the compact cache for the ~620 cases
+# not yet cached (about 2 s per case on 2 CPUs, so ~20 minutes); later epochs are ~4-5 minutes each
+# (extrapolated from 78 s for 250 cases). The cache needs roughly 40-46 GB of local disk in total (estimate
+# from phantom measurements). `train.epochs` fixes the learning-rate schedule, so choose it to fit the time you
+# have: ~20 min + epochs x ~4.6 min. train.max_hours is a guard that stops cleanly and writes a resumable last.pt.
+#
+# Model selection uses 60 validation cases (a bigger, less noisy sample than the 20 of the 1-hour run).
+_base_: colab_t4_1h.yaml
+
+train:
+  limit_train_cases: null
+  limit_val_cases: 60
+  epochs: 12
+  val_interval: 4
+  max_hours: 1.75

@@ -30,10 +30,11 @@ import pandas as pd
 import torch
 from monai.data import DataLoader, Dataset, decollate_batch
 
+from .config import apply_overrides
 from .data import load_canonical_label, load_split, prepare_cases, select_cases
 from .inference import DISCLAIMER, load_trained_model, predict_case, save_label_nifti
 from .labels import REGIONS, invert_label_map
-from .metrics import aggregate_case_metrics, compute_case_metrics, json_safe
+from .metrics import aggregate_case_metrics, compute_case_metrics, confidence_intervals, json_safe
 from .transforms import build_eval_transforms
 from .utils import get_logger, resolve_amp, select_device, setup_logging
 
@@ -73,7 +74,27 @@ def write_markdown_summary(summary: dict[str, Any], path: Path) -> None:
             f"| {metric} | {region or 'mean'} | {stats['mean']:.4f} | {stats['median']:.4f} | "
             f"{stats['std']:.4f} | {stats['min']:.4f} | {stats['max']:.4f} | {stats['n']} |"
         )
+    intervals = summary.get("confidence_intervals") or {}
+    if intervals:
+        lines += [
+            "",
+            "95% confidence intervals of the mean (bootstrap over patients, "
+            f"{summary['n_patients']} patients; several scans of one patient are resampled together):",
+            "",
+            "| Metric | Region | Mean | 95% CI |",
+            "|---|---|---|---|",
+        ]
+        for column, ci in intervals.items():
+            if ci["n"] == 0:
+                continue
+            metric, _, region = column.partition("_")
+            lines.append(f"| {metric} | {region or 'mean'} | {ci['mean']:.4f} | [{ci['ci_low']:.4f}, {ci['ci_high']:.4f}] |")
+    inference = summary.get("inference", {})
     lines += [
+        "",
+        f"Inference: TTA `{inference.get('tta', 'none')}`, post-processing "
+        f"ET<{inference.get('postprocess_et_min_voxels', 0)} voxels -> NCR, "
+        f"components<{inference.get('postprocess_min_component_voxels', 0)} voxels removed.",
         "",
         "Empty reference masks per region: "
         + ", ".join(f"{r}={summary['empty_reference_cases'][r]}" for r in REGIONS),
@@ -95,6 +116,7 @@ def evaluate(
     save_predictions: bool = True,
     limit: int | None = None,
     num_workers: int | None = None,
+    overrides: list[str] | None = None,
 ) -> dict[str, Any]:
     logger = get_logger()
     checkpoint = Path(checkpoint)
@@ -108,6 +130,8 @@ def evaluate(
 
     device = select_device(device_name)
     model, cfg, profile, ckpt = load_trained_model(checkpoint, device)
+    if overrides:  # inference-time options only, e.g. inference.tta=flips3
+        cfg = apply_overrides(cfg, overrides)
     use_amp = resolve_amp(cfg.train.amp, cfg.train.amp_dtype, device)
     if data_root:
         cfg.data.root = data_root
@@ -163,7 +187,12 @@ def evaluate(
         "dataset_profile": profile.name,
         "modalities": cfg.data.modalities,
         "inference": {"overlap": cfg.inference.overlap, "patch_size": cfg.train.patch_size,
-                      "blend_mode": cfg.inference.blend_mode},
+                      "blend_mode": cfg.inference.blend_mode, "tta": cfg.inference.tta,
+                      "output": cfg.model.output,
+                      "postprocess_et_min_voxels": cfg.inference.postprocess_et_min_voxels,
+                      "postprocess_min_component_voxels": cfg.inference.postprocess_min_component_voxels},
+        "n_patients": int(frame["patient_id"].nunique()),
+        "confidence_intervals": confidence_intervals(frame, columns),
         "conventions": CONVENTIONS,
         "empty_reference_cases": {r: int((frame[f"ref_voxels_{r}"] == 0).sum()) for r in REGIONS},
         "metrics": aggregate_case_metrics(rows, columns),
@@ -193,11 +222,13 @@ def main(argv: list[str] | None = None) -> None:
     parser.add_argument("--no-save-predictions", action="store_true")
     parser.add_argument("--limit", type=int, default=None, help="Evaluate only the first N cases (debugging)")
     parser.add_argument("--num-workers", type=int, default=None)
+    parser.add_argument("--set", nargs="*", default=[], metavar="KEY=VALUE",
+                        help="Inference-time overrides, e.g. inference.tta=flips3 inference.postprocess_et_min_voxels=100")
     args = parser.parse_args(argv)
     setup_logging()
     evaluate(
         args.checkpoint, args.subset, args.data_root, args.output_dir, args.device,
-        not args.no_hd95, not args.no_save_predictions, args.limit, args.num_workers,
+        not args.no_hd95, not args.no_save_predictions, args.limit, args.num_workers, list(args.set),
     )
 
 

@@ -14,11 +14,11 @@ enhancing tumour, the tumour core and the whole tumour.
 
 | | |
 |---|---|
-| Code | Complete. **64 unit tests** pass (on synthetic phantoms that live only in `tests/`; the library refuses phantom data elsewhere). |
+| Code | Complete. **86 unit tests** pass (on synthetic phantoms that live only in `tests/`; the library refuses phantom data elsewhere). |
 | Real data | BraTS 2023 Adult Glioma training set downloaded and validated: **1251 complete cases, 1133 patients**, 4 modalities + mask each, no geometry errors. |
 | Pilot | A short real-data pilot on a Colab T4 ran end to end: the loss decreased and validation Dice rose. A pilot is a sanity check, **not a result**. |
 | Baseline run | **Done:** 20 epochs on a free Colab T4 in about 35 minutes of training, using 250 of the 874 training cases. Evaluated once on the held-out test set (194 cases), see [Results](#results). |
-| Next | Longer training on all training cases, a larger patch and model, post-processing and test-time augmentation (see [Future improvements](docs/reference.md#future-improvements)). |
+| Next | Implemented and unit-tested, **not yet trained or measured**: all-data training, larger patch/model, region-based (sigmoid) training, test-time augmentation, post-processing, bootstrap confidence intervals and failure analysis (see [Improving the model](#improving-the-model)). |
 
 ## How it works
 
@@ -83,7 +83,9 @@ python scripts/visualize.py case --config configs/default.yaml --data-root "$DAT
   and writes a checkpoint you can resume from.
 * **Reproducible:** typed YAML configs with inheritance, every run stores its config, split, environment and
   history next to the checkpoints.
-* **Tested:** unit tests for labels, metrics, data discovery, splits, caches, the model, losses and the whole
+* **Honest evaluation:** bootstrap 95% confidence intervals that resample whole *patients*, paired comparison of two
+  runs, and a failure analysis that shows *how* the model fails.
+* **Tested:** unit tests for labels, metrics, data discovery, splits, caches, the model, losses, decoding, post-processing and the whole
   train / evaluate / predict loop.
 
 ## Quick start
@@ -117,6 +119,24 @@ Evaluate the best checkpoint on the held-out test set (once) and segment a new p
 python scripts/evaluate.py --checkpoint outputs/runs/<run>/checkpoints/best.pt --data-root "$DATA"
 python scripts/predict.py  --checkpoint outputs/runs/<run>/checkpoints/best.pt --input-dir /path/to/patient --output-dir outputs/predictions
 ```
+
+## Improving the model
+
+Everything below is implemented and covered by unit tests, but **none of it has been trained or measured on real data yet**;
+the reported baseline above does not use any of it. Model choices are made on the validation set, the test set is only
+for the final model.
+
+| Idea | How to use it | Status |
+|---|---|---|
+| All 874 training cases, more epochs | `configs/colab_t4_full.yaml` | configured, not run |
+| Larger patch (128³) and model (16.6 M parameters) | `configs/colab_t4_large.yaml` | configured, not run |
+| Region-based training (sigmoid ET/TC/WT, Dice + BCE) | `configs/colab_t4_regions.yaml` or `--set model.output=regions` | implemented, not run |
+| All three together | `configs/colab_t4_all.yaml` | configured, not run |
+| Test-time augmentation (average over flips) | `--set inference.tta=flips3` (or `flips8`) in `evaluate.py` / `predict.py` | implemented, not measured |
+| Post-processing (small ET to necrosis, drop small components) | tune with `scripts/tune_postprocessing.py` on **validation**, then `--set inference.postprocess_et_min_voxels=N inference.postprocess_min_component_voxels=M` | implemented, not measured |
+| Failure analysis | `python scripts/analyze_failures.py --eval-dir outputs/runs/<run>/eval_test` | numbers only, no images |
+| Confidence intervals | written automatically to `eval_*/summary.md` (patient-level bootstrap) | implemented |
+| Paired comparison of two runs | `python scripts/compare_eval.py <eval_dir_A> <eval_dir_B>` | implemented |
 
 ## Results
 

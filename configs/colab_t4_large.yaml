@@ -1,0 +1,14 @@
+# Experiment 2: larger patch (128^3) and larger model (16.6M parameters) on top of colab_t4_full.yaml.
+#
+# Planning estimates, NOT measured on a T4: the smoke test of this model/patch (cloud_cuda.yaml) used 4.78 GB of
+# the 15 GB GPU memory, so it fits. The GPU part of a step is ~0.7 s for 2 patches, which suggests ~10 minutes per
+# epoch over 874 cases once the cache exists, i.e. about twice the cost of the 5.65M / 96^3 setting. Compare with
+# colab_t4_full.yaml at the same number of epochs.
+_base_: colab_t4_full.yaml
+
+model:
+  features: [32, 64, 128, 256, 320]   # 16.6M parameters
+
+train:
+  patch_size: [128, 128, 128]
+  max_hours: 2.5

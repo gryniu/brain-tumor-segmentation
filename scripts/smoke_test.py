@@ -22,7 +22,7 @@ from monai.data import DataLoader
 
 from brain_seg.config import load_config
 from brain_seg.data import build_dataset, make_patient_split, prepare_cases, select_cases
-from brain_seg.inference import sliding_window_logits
+from brain_seg.inference import labels_from_probabilities, probabilities_from_logits, sliding_window_logits
 from brain_seg.labels import CLASS_NAMES, NUM_CLASSES
 from brain_seg.losses import build_loss
 from brain_seg.model import build_model, count_parameters
@@ -126,7 +126,7 @@ def main() -> None:
 
     device = select_device(t.device)
     model = build_model(cfg.model, len(cfg.data.modalities), NUM_CLASSES).to(device)
-    loss_fn = build_loss(cfg.loss, NUM_CLASSES).to(device)
+    loss_fn = build_loss(cfg.loss, NUM_CLASSES, cfg.model.output).to(device)
     use_amp = resolve_amp(t.amp, t.amp_dtype, device)
     if device.type == "cuda":
         torch.cuda.reset_peak_memory_stats(device)
@@ -147,7 +147,8 @@ def main() -> None:
     print(f"Full-volume inference on {val_case.case_id}: input {tuple(data['image'].shape)} -> "
           f"logits {tuple(out.shape)} in {time.time() - start:.1f}s")
     assert out.shape[2:] == data["image"].shape[1:], "Sliding-window output does not match input size"
-    print(f"Predicted classes (untrained model): {np.unique(out.argmax(1).cpu().numpy()).tolist()}")
+    predicted = labels_from_probabilities(probabilities_from_logits(out, cfg.model.output), cfg.model.output)
+    print(f"Predicted classes (untrained model): {np.unique(predicted.cpu().numpy()).tolist()}")
     if args.bench_steps > 0:
         benchmark(model, loader, loss_fn, cfg, device, use_amp, args.bench_steps, len(split["train"]), workers)
     print("\nSmoke test passed.")
