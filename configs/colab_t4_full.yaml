@@ -1,10 +1,12 @@
 # All 874 training cases; otherwise as colab_t4_1h.yaml. Model selection on 60 validation cases.
-# Estimated (not measured): ~20 min to extend the cache, then ~4-5 min per epoch; cache ~40-46 GB.
+# The reported run was started with epochs=12, stopped after epoch 9 by a Colab runtime reset, then resumed from
+# last.pt with --set train.epochs=30 train.val_interval=5 train.max_hours=3.5 (the cosine schedule restarts from the
+# resume point, so it is not one uninterrupted schedule). Those overrides are the values below.
 _base_: colab_t4_1h.yaml
 
 train:
   limit_train_cases: null
   limit_val_cases: 60
-  epochs: 12
-  val_interval: 4
-  max_hours: 1.75
+  epochs: 30
+  val_interval: 5
+  max_hours: 3.5

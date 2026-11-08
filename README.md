@@ -168,6 +168,21 @@ precision on 192 / 192 / 194.
 * Precision is higher than sensitivity in every region: on average the model under-segments (misses some tumour)
   rather than over-segments.
 * One run, one seed: there is no confidence interval, so small differences between future runs are not meaningful.
+
+### Longer run on all training data (`colab_full`)
+
+Same model and patch size, trained on all 874 training cases for 30 epochs (`configs/colab_t4_full.yaml`; the run
+was interrupted once and resumed, see the comments in the config). Validation scores from the training log, on 60
+validation cases, at the best checkpoint (epoch 25) and at the last epoch:
+
+| Checkpoint | Dice ET | Dice TC | Dice WT | Dice mean |
+|---|---|---|---|---|
+| epoch 25 (best, selected on these 60 cases) | n/a | n/a | n/a | 0.897 |
+| epoch 30 (last) | 0.854 | 0.889 | 0.933 | 0.892 |
+
+These are **validation** numbers: the checkpoint was selected on the same cases, so they are optimistic, and the
+baseline's 0.821 above was measured on a different, smaller 20-case subset, so the two are not comparable.
+The held-out test evaluation of this run has not been done yet; this section will be updated with it.
 * BraTS 2023 data, trained and tested on cases from the same release; performance on other scanners or
   populations is not known.
 
