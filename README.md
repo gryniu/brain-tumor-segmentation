@@ -168,23 +168,37 @@ precision on 192 / 192 / 194.
 * Precision is higher than sensitivity in every region: on average the model under-segments (misses some tumour)
   rather than over-segments.
 * One run, one seed: there is no confidence interval, so small differences between future runs are not meaningful.
+* BraTS 2023 data, trained and tested on cases from the same release; performance on other scanners or
+  populations is not known.
 
 ### Longer run on all training data (`colab_full`)
 
-Same model and patch size, trained on all 874 training cases for 30 epochs (`configs/colab_t4_full.yaml`; the run
-was interrupted once and resumed, see the comments in the config). Validation scores from the training log, on 60
-validation cases, at the best checkpoint (epoch 25) and at the last epoch:
+Same model and patch size (5.65 M parameters, 96³), trained on **all 874 training cases** for 30 epochs
+(`configs/colab_t4_full.yaml`; the run was interrupted once and resumed, see the comments in the config). The
+checkpoint of epoch 25 was selected on 60 validation cases and then evaluated **once** on the same 194 held-out test
+cases as the baseline (same split, same preprocessing, no TTA, no post-processing).
 
-| Checkpoint | Dice ET | Dice TC | Dice WT | Dice mean |
+Test set, Dice (n = 194):
+
+| Region | Baseline `colab_1h` mean | `colab_full` mean ± std | `colab_full` median |
+|---|---|---|---|
+| ET | 0.825 | 0.862 ± 0.180 | 0.922 |
+| TC | 0.871 | 0.912 ± 0.137 | 0.955 |
+| WT | 0.903 | 0.923 ± 0.066 | 0.943 |
+| mean of the three | 0.866 | 0.899 | n/a |
+
+Both runs were scored on the same test cases, so the columns are comparable. The gain is largest for ET (+0.037) and
+TC (+0.041), smaller for WT (+0.020). No confidence interval or paired test has been computed for this difference yet,
+so the size of the gain is a point estimate. HD95, sensitivity and precision for this run are in its
+`eval_test/summary.md`, which is not reproduced here.
+
+Validation, same 60 cases for both models (full volume, original voxel space; the `colab_full` checkpoint was chosen
+on these cases, so its numbers are slightly optimistic):
+
+| Model | Dice ET | Dice TC | Dice WT | mean |
 |---|---|---|---|---|
-| epoch 25 (best, selected on these 60 cases) | n/a | n/a | n/a | 0.897 |
-| epoch 30 (last) | 0.854 | 0.889 | 0.933 | 0.892 |
-
-These are **validation** numbers: the checkpoint was selected on the same cases, so they are optimistic, and the
-baseline's 0.821 above was measured on a different, smaller 20-case subset, so the two are not comparable.
-The held-out test evaluation of this run has not been done yet; this section will be updated with it.
-* BraTS 2023 data, trained and tested on cases from the same release; performance on other scanners or
-  populations is not known.
+| `colab_1h` | 0.813 | 0.858 | 0.913 | 0.861 |
+| `colab_full` | 0.871 | 0.889 | 0.932 | 0.897 |
 
 ## Documentation
 
