@@ -214,11 +214,20 @@ on these cases, so its numbers are slightly optimistic):
 | `colab_1h` | 0.813 | 0.858 | 0.913 | 0.861 |
 | `colab_full` | 0.871 | 0.889 | 0.932 | 0.897 |
 
+**Where it fails** ([docs/failure_analysis.md](docs/failure_analysis.md), from the per-case table of the test run).
+A region with Dice below 0.5 counts as a failure: this happens in 12 of 194 cases for ET, 7 for TC and 1 for WT, so
+locating the tumour is reliable and the errors are in its inner sub-regions. Four of the ten worst cases have an
+enhancing reference of at most 22 voxels (three are empty), and three of the five empty ET references got a false
+positive. Small regions are somewhat harder (Spearman rho 0.27-0.30 between Dice and reference volume), but only the
+smallest ET quartile stands out (mean Dice 0.794 against about 0.90). The analysis is based on voxel counts only; no
+scans were inspected, so it describes the failures and does not explain their cause.
+
 ## Documentation
 
 | Document | Contents |
 |---|---|
 | [docs/reference.md](docs/reference.md) | Full reference: dataset, method, installation, workflow, hardware settings, experiments, limitations |
+| [docs/failure_analysis.md](docs/failure_analysis.md) | Failure analysis of the full-data run on the test set: failure types, dependence on region size, ten worst cases |
 | [docs/methodology.md](docs/methodology.md) | Why the pipeline is built this way; evaluation protocol |
 | [docs/cloud_gpu.md](docs/cloud_gpu.md) | Renting a GPU, persistence, exact cloud commands |
 | [docs/data_report.md](docs/data_report.md) | Dataset facts and the T4 benchmark |
