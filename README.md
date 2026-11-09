@@ -178,19 +178,33 @@ Same model and patch size (5.65 M parameters, 96³), trained on **all 874 traini
 checkpoint of epoch 25 was selected on 60 validation cases and then evaluated **once** on the same 194 held-out test
 cases as the baseline (same split, same preprocessing, no TTA, no post-processing).
 
-Test set, Dice (n = 194):
+Test set, 194 cases, `colab_full` (mean with 95% CI from a bootstrap over 170 patients, so scans of one patient are
+resampled together):
 
-| Region | Baseline `colab_1h` mean | `colab_full` mean ± std | `colab_full` median |
-|---|---|---|---|
-| ET | 0.825 | 0.862 ± 0.180 | 0.922 |
-| TC | 0.871 | 0.912 ± 0.137 | 0.955 |
-| WT | 0.903 | 0.923 ± 0.066 | 0.943 |
-| mean of the three | 0.866 | 0.899 | n/a |
+| Region | Dice mean [95% CI] | Dice median | HD95 mean (mm) [95% CI] | HD95 median (mm) | Sensitivity | Precision |
+|---|---|---|---|---|---|---|
+| ET | 0.862 [0.835, 0.885] | 0.922 | 4.12 [3.01, 5.42] | 1.41 | 0.873 | 0.887 |
+| TC | 0.912 [0.891, 0.930] | 0.955 | 5.07 [3.73, 6.71] | 1.73 | 0.908 | 0.936 |
+| WT | 0.923 [0.913, 0.932] | 0.943 | 7.85 [5.93, 9.92] | 2.45 | 0.910 | 0.944 |
+| mean of the three | 0.899 [0.882, 0.913] | 0.933 | n/a | n/a | n/a | n/a |
 
-Both runs were scored on the same test cases, so the columns are comparable. The gain is largest for ET (+0.037) and
-TC (+0.041), smaller for WT (+0.020). No confidence interval or paired test has been computed for this difference yet,
-so the size of the gain is a point estimate. HD95, sensitivity and precision for this run are in its
-`eval_test/summary.md`, which is not reproduced here.
+Same test cases and same inference settings (no TTA, no post-processing) as the baseline, so the two runs compare
+directly:
+
+| Region | Dice baseline → `colab_full` | HD95 mean (mm) baseline → `colab_full` |
+|---|---|---|
+| ET | 0.825 → 0.862 | 6.99 → 4.12 |
+| TC | 0.871 → 0.912 | 8.91 → 5.07 |
+| WT | 0.903 → 0.923 | 10.44 → 7.85 |
+| mean of the three | 0.866 → 0.899 | n/a |
+
+The baseline's Dice means lie below the lower end of the new run's confidence interval in every region, which points
+to a real gain. This is not a paired test: the baseline was evaluated before the bootstrap tooling existed and has no
+interval of its own. The mean is again clearly lower than the median (and HD95 several times above its median), so a
+few failures remain: the minimum Dice is 0.00 for ET and 0.002 for TC, and the largest HD95 values are 45 mm (ET),
+81 mm (TC) and 85 mm (WT). Five test cases have an empty ET reference mask and one an empty TC mask (convention: a
+correctly empty prediction scores 1.0); undefined values are excluded from the means, so HD95, sensitivity and
+precision are based on 189-194 cases per region. Source: `eval_test/summary.md` of this run.
 
 Validation, same 60 cases for both models (full volume, original voxel space; the `colab_full` checkpoint was chosen
 on these cases, so its numbers are slightly optimistic):
